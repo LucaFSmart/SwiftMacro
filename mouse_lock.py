@@ -120,3 +120,32 @@ def create_tray_icon() -> "Image.Image":
     draw.line([(cx, cy - r), (cx, cy - 6)], fill=(0, 200, 100, 255), width=1)
     draw.line([(cx, cy + 6), (cx, cy + r)], fill=(0, 200, 100, 255), width=1)
     return img
+
+
+# ---------------------------------------------------------------------------
+# Lock loop — daemon thread that holds cursor at saved position
+# ---------------------------------------------------------------------------
+class LockLoop:
+    """Continuously moves cursor to saved_pos while lock_active is True."""
+
+    def __init__(self, state: AppState) -> None:
+        self._state = state
+
+    def run(self) -> None:
+        """Thread entry point. Exits when stop_event is set."""
+        while not self._state.stop_event.is_set():
+            if self._state.get_lock_active():
+                pos = self._state.get_saved_pos()
+                if pos is not None:
+                    try:
+                        ctypes.windll.user32.SetCursorPos(pos[0], pos[1])
+                    except Exception:
+                        pass  # non-critical; next iteration will retry
+            # Fast-exit sleep: wakes immediately when stop_event is set
+            self._state.stop_event.wait(timeout=LOCK_INTERVAL_MS / 1000.0)
+
+    def start(self) -> threading.Thread:
+        """Spawn and return the daemon thread."""
+        t = threading.Thread(target=self.run, name="LockLoop", daemon=True)
+        t.start()
+        return t
