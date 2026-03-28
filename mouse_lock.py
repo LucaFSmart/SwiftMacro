@@ -235,3 +235,190 @@ class HotkeyManager:
 
 # Mutable reference so HotkeyManager can call shutdown() without a circular import
 _shutdown_ref: list = [lambda: None]
+
+
+# ---------------------------------------------------------------------------
+# show_window helper (called on main thread via root.after)
+# ---------------------------------------------------------------------------
+def show_window(root) -> None:
+    """Restore and bring the Tkinter window to the foreground."""
+    root.deiconify()
+    root.lift()
+    root.focus_force()
+
+
+# ---------------------------------------------------------------------------
+# Tray manager
+# ---------------------------------------------------------------------------
+class TrayManager:
+    """Manages the system tray icon and right-click menu."""
+
+    def __init__(self, state: AppState, root) -> None:
+        self._state = state
+        self._root = root
+        self._icon = None
+
+    def start(self) -> bool:
+        """
+        Create and start the tray icon in its own thread.
+        Returns True on success, False on failure.
+        """
+        try:
+            import pystray
+            icon_image = create_tray_icon()
+
+            menu = pystray.Menu(
+                pystray.MenuItem(
+                    "Show UI",
+                    lambda icon, item: self._root.after(0, lambda: show_window(self._root)),
+                ),
+                pystray.MenuItem(
+                    "Lock",
+                    lambda icon, item: self._state.toggle_lock(),
+                    checked=lambda item: self._state.get_lock_active(),
+                ),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem(
+                    "Exit",
+                    lambda icon, item: self._root.after(0, _shutdown_ref[0]),
+                ),
+            )
+
+            self._icon = pystray.Icon(
+                name="MouseLock",
+                icon=icon_image,
+                title="Mouse Lock",
+                menu=menu,
+            )
+
+            # Double-click restores window
+            self._icon.default_action = lambda icon, item: self._root.after(
+                0, lambda: show_window(self._root)
+            )
+
+            # Run tray in its own daemon thread
+            t = threading.Thread(target=self._icon.run, name="TrayThread", daemon=True)
+            t.start()
+            return True
+
+        except Exception:
+            return False
+
+    def stop(self) -> None:
+        """Stop the tray icon. Errors ignored."""
+        if self._icon is not None:
+            try:
+                self._icon.stop()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# Application UI
+# ---------------------------------------------------------------------------
+class AppUI:
+    """
+    Tkinter window (~300x220px). Polls AppState every UI_POLL_MS ms.
+    All state reads go through AppState getters (thread-safe).
+    """
+
+    def __init__(self, root, state: AppState, tray_available: bool) -> None:
+        import tkinter as tk
+
+        self._root = root
+        self._state = state
+        self._tray_available = tray_available
+
+        root.title("Mouse Lock")
+        root.resizable(False, False)
+        root.geometry("300x220")
+
+        # --- Position row ---
+        tk.Label(root, text="Saved Position:", anchor="w").pack(fill="x", padx=10, pady=(10, 0))
+        self._pos_label = tk.Label(root, text="Not set", anchor="w", fg="gray")
+        self._pos_label.pack(fill="x", padx=20)
+
+        # --- Lock status row ---
+        tk.Label(root, text="Lock Status:", anchor="w").pack(fill="x", padx=10, pady=(6, 0))
+        self._lock_label = tk.Label(root, text="Unlocked", anchor="w", fg="gray")
+        self._lock_label.pack(fill="x", padx=20)
+
+        # --- Status message row ---
+        self._status_label = tk.Label(root, text="", anchor="w", fg="steelblue")
+        self._status_label.pack(fill="x", padx=10, pady=(4, 0))
+
+        # --- Buttons ---
+        btn_frame = tk.Frame(root)
+        btn_frame.pack(pady=10)
+        tk.Button(btn_frame, text="Save Position",  width=13, command=self._cmd_save).grid(row=0, column=0, padx=4)
+        tk.Button(btn_frame, text="Move Now",       width=10, command=self._cmd_move).grid(row=0, column=1, padx=4)
+        tk.Button(btn_frame, text="Toggle Lock",    width=11, command=self._cmd_toggle).grid(row=0, column=2, padx=4)
+
+        # --- Hotkey error banner (hidden until needed) ---
+        self._error_frame = tk.Frame(root, bg="#ffcccc")
+        self._error_label = tk.Label(self._error_frame, text="", bg="#ffcccc", fg="#990000",
+                                     anchor="w", justify="left", wraplength=280)
+        self._error_label.pack(padx=6, pady=4, fill="x")
+
+        # --- Close / delete window behaviour ---
+        if tray_available:
+            root.protocol("WM_DELETE_WINDOW", root.withdraw)  # minimize to tray
+        else:
+            root.protocol("WM_DELETE_WINDOW", lambda: _shutdown_ref[0]())
+
+        # Start polling
+        root.after(UI_POLL_MS, self._poll)
+
+    # --- Button commands (run on main thread) ---
+
+    def _cmd_save(self) -> None:
+        pos = HotkeyManager._get_cursor_pos()
+        if pos:
+            self._state.set_saved_pos(pos)
+
+    def _cmd_move(self) -> None:
+        pos = self._state.get_saved_pos()
+        if pos is None:
+            self._state.set_status_message("No position saved")
+            return
+        try:
+            ctypes.windll.user32.SetCursorPos(pos[0], pos[1])
+        except Exception:
+            self._state.set_status_message("Move failed")
+
+    def _cmd_toggle(self) -> None:
+        self._state.toggle_lock()
+
+    # --- Polling ---
+
+    def _poll(self) -> None:
+        """Refresh UI labels from AppState. Reschedules itself unless shutting down."""
+        if self._state.stop_event.is_set():
+            return  # do not reschedule after shutdown
+
+        # Update position label
+        pos = self._state.get_saved_pos()
+        self._pos_label.config(
+            text=f"X: {pos[0]},  Y: {pos[1]}" if pos else "Not set",
+            fg="black" if pos else "gray",
+        )
+
+        # Update lock label
+        active = self._state.get_lock_active()
+        self._lock_label.config(
+            text="Lock Active" if active else "Unlocked",
+            fg="red" if active else "gray",
+        )
+
+        # Update transient status
+        self._status_label.config(text=self._state.get_status_message())
+
+        # Update error banner
+        errors = self._state.get_hotkey_errors()
+        if errors:
+            self._error_label.config(text="\n".join(errors))
+            self._error_frame.pack(fill="x", padx=10)
+        else:
+            self._error_frame.pack_forget()
+
+        self._root.after(UI_POLL_MS, self._poll)
