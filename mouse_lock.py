@@ -103,7 +103,7 @@ def make_state() -> AppState:
 # ---------------------------------------------------------------------------
 # Tray icon (generated at runtime — no image file required)
 # ---------------------------------------------------------------------------
-def create_tray_icon():
+def create_tray_icon() -> "Image.Image":
     """Draw a crosshair/target symbol on a dark background. Returns a PIL Image."""
     from PIL import Image, ImageDraw
     img = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (30, 30, 30, 255))
