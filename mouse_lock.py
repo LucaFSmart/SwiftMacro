@@ -149,3 +149,89 @@ class LockLoop:
         t = threading.Thread(target=self.run, name="LockLoop", daemon=True)
         t.start()
         return t
+
+
+# ---------------------------------------------------------------------------
+# Hotkey manager
+# ---------------------------------------------------------------------------
+class HotkeyManager:
+    """Registers and manages global hotkeys. Failures are stored, not raised."""
+
+    def __init__(self, state: AppState, root) -> None:
+        self._state = state
+        self._root = root          # Tkinter root — for root.after() calls
+        self._registered: list[str] = []
+
+    def register_all(self) -> None:
+        """Register all four hotkeys. Each failure is stored in state."""
+        import keyboard
+
+        bindings = [
+            (HOTKEY_SAVE,   self._on_save),
+            (HOTKEY_MOVE,   self._on_move),
+            (HOTKEY_TOGGLE, self._on_toggle),
+            (HOTKEY_EXIT,   self._on_exit),
+        ]
+        for combo, callback in bindings:
+            try:
+                keyboard.add_hotkey(combo, callback, suppress=False)
+                self._registered.append(combo)
+            except Exception as exc:
+                self._state.add_hotkey_error(f"{combo}: {exc}")
+
+    def unregister_all(self) -> None:
+        """Unregister all successfully registered hotkeys. Errors are ignored."""
+        import keyboard
+        for combo in self._registered:
+            try:
+                keyboard.remove_hotkey(combo)
+            except Exception:
+                pass
+        self._registered.clear()
+
+    def start(self) -> threading.Thread:
+        """Spawn daemon thread that keeps the keyboard hook alive."""
+        import keyboard
+        t = threading.Thread(target=keyboard.wait, name="HotkeyThread", daemon=True)
+        t.start()
+        return t
+
+    # --- callbacks (run on hotkey thread) ---
+
+    def _on_save(self) -> None:
+        pos = self._get_cursor_pos()
+        if pos:
+            self._state.set_saved_pos(pos)
+        # UI polling loop refreshes automatically every UI_POLL_MS; no extra call needed
+
+    def _on_move(self) -> None:
+        pos = self._state.get_saved_pos()
+        if pos is None:
+            self._state.set_status_message("No position saved")
+            return
+        try:
+            ctypes.windll.user32.SetCursorPos(pos[0], pos[1])
+        except Exception:
+            self._state.set_status_message("Move failed")
+
+    def _on_toggle(self) -> None:
+        self._state.toggle_lock()
+
+    def _on_exit(self) -> None:
+        self._root.after(0, _shutdown_ref[0])  # _shutdown_ref set in main()
+
+    @staticmethod
+    def _get_cursor_pos() -> tuple[int, int] | None:
+        """Read current cursor position via Win32 GetCursorPos."""
+        class POINT(ctypes.Structure):
+            _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+        pt = POINT()
+        try:
+            ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+            return (pt.x, pt.y)
+        except Exception:
+            return None
+
+
+# Mutable reference so HotkeyManager can call shutdown() without a circular import
+_shutdown_ref: list = [lambda: None]
