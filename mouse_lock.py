@@ -21,6 +21,22 @@ ICON_SIZE         = 64    # tray icon size in pixels
 
 
 # ---------------------------------------------------------------------------
+# DPI awareness
+# ---------------------------------------------------------------------------
+def init_dpi_awareness() -> None:
+    """Best-effort DPI awareness. Tries modern API first, falls back, never crashes."""
+    try:
+        # Windows 8.1+: per-monitor DPI awareness
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            # Windows Vista+: system DPI awareness
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass  # silently continue; minor coordinate mismatch possible
+
+
+# ---------------------------------------------------------------------------
 # Shared state
 # ---------------------------------------------------------------------------
 @dataclass
