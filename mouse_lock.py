@@ -422,3 +422,72 @@ class AppUI:
             self._error_frame.pack_forget()
 
         self._root.after(UI_POLL_MS, self._poll)
+
+
+# ---------------------------------------------------------------------------
+# Shutdown
+# ---------------------------------------------------------------------------
+def make_shutdown(state: AppState, hotkey_mgr: HotkeyManager,
+                  tray_mgr: TrayManager | None, root) -> callable:
+    """
+    Factory that returns the shutdown function. Stored in _shutdown_ref so
+    HotkeyManager and TrayManager can call it without circular references.
+    """
+    def shutdown() -> None:
+        if state.stop_event.is_set():
+            return  # already shutting down — no-op
+        state.stop_event.set()
+        hotkey_mgr.unregister_all()
+        if tray_mgr is not None:
+            tray_mgr.stop()
+        root.after(0, root.destroy)
+
+    return shutdown
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+def main() -> None:
+    import tkinter as tk
+
+    # 1. DPI awareness — must be first
+    init_dpi_awareness()
+
+    # 2. Shared state
+    state = make_state()
+
+    # 3. Tkinter root (do NOT call mainloop yet)
+    root = tk.Tk()
+
+    # 4. Tray
+    tray_mgr = TrayManager(state, root)
+    tray_available = tray_mgr.start()
+    if not tray_available:
+        state.set_status_message("Tray unavailable")
+
+    # 5. Build UI (must happen after tray_available is known)
+    AppUI(root, state, tray_available)
+
+    # 5b. Hide window only if tray is available
+    if tray_available:
+        root.withdraw()
+
+    # 6. Lock loop — started before hotkeys so lock is ready if user hits CTRL+ALT+T immediately
+    lock_loop = LockLoop(state)
+    lock_loop.start()
+
+    # 7. Wire shutdown BEFORE starting hotkey thread — prevents window where
+    #    CTRL+ALT+ESC fires before _shutdown_ref is populated
+    hotkey_mgr = HotkeyManager(state, root)
+    hotkey_mgr.register_all()
+    shutdown_fn = make_shutdown(state, hotkey_mgr, tray_mgr if tray_available else None, root)
+    _shutdown_ref[0] = shutdown_fn
+    hotkey_mgr.start()  # start AFTER _shutdown_ref is set
+
+    # 8. Run — blocks until shutdown
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
