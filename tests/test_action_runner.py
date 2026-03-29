@@ -1,0 +1,142 @@
+import threading
+import time
+from unittest.mock import patch, MagicMock
+from mouse_lock.state import make_state
+from mouse_lock.models import ActionStep, Profile
+from mouse_lock.action_runner import ActionRunner
+
+
+def make_profile(steps, name="Test"):
+    return Profile(id="test-id", name=name, hotkey=None, steps=steps)
+
+
+def test_run_empty_profile():
+    state = make_state()
+    runner = ActionRunner(state)
+    profile = make_profile([])
+    runner.run_profile(profile)
+    time.sleep(0.1)
+    assert not runner.is_running()
+
+
+def test_run_move_step():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="move", params={"x": 100, "y": 200})]
+    profile = make_profile(steps)
+    with patch("mouse_lock.action_runner.cursor") as mock_cursor:
+        mock_cursor.set_cursor_pos.return_value = True
+        runner.run_profile(profile)
+        time.sleep(0.2)
+    mock_cursor.set_cursor_pos.assert_called_with(100, 200)
+
+
+def test_run_click_step():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="click", params={"button": "left", "x": 50, "y": 60})]
+    profile = make_profile(steps)
+    with patch("mouse_lock.action_runner.cursor") as mock_cursor:
+        mock_cursor.click.return_value = True
+        runner.run_profile(profile)
+        time.sleep(0.2)
+    mock_cursor.click.assert_called_with("left", 50, 60)
+
+
+def test_run_wait_step():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="wait", params={"ms": 50})]
+    profile = make_profile(steps)
+    runner.run_profile(profile)
+    time.sleep(0.2)
+    assert not runner.is_running()
+
+
+def test_run_keypress_step():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="keypress", params={"key": "enter"})]
+    profile = make_profile(steps)
+    with patch("mouse_lock.action_runner.keyboard") as mock_kb:
+        runner.run_profile(profile)
+        time.sleep(0.2)
+    mock_kb.press_and_release.assert_called_with("enter")
+
+
+def test_stop_interrupts_chain():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="wait", params={"ms": 5000})]
+    profile = make_profile(steps)
+    runner.run_profile(profile)
+    time.sleep(0.05)
+    assert runner.is_running()
+    runner.stop()
+    time.sleep(0.1)
+    assert not runner.is_running()
+
+
+def test_ignore_while_running():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="wait", params={"ms": 5000})]
+    profile = make_profile(steps)
+    runner.run_profile(profile)
+    time.sleep(0.05)
+    runner.run_profile(profile)  # should be ignored
+    assert "Already running" in state.get_status_message()
+    runner.stop()
+    time.sleep(0.1)
+
+
+def test_invalid_params_skipped():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="move", params={"x": 100})]  # missing y
+    profile = make_profile(steps)
+    with patch("mouse_lock.action_runner.cursor") as mock_cursor:
+        runner.run_profile(profile)
+        time.sleep(0.2)
+    mock_cursor.set_cursor_pos.assert_not_called()
+
+
+def test_chain_lock_step_sets_state():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="lock", params={"x": 500, "y": 300, "duration_ms": 100})]
+    profile = make_profile(steps)
+    runner.run_profile(profile)
+    time.sleep(0.02)
+    active, pos = state.get_chain_lock()
+    assert active is True
+    assert pos == (500, 300)
+    time.sleep(0.3)
+    active, _ = state.get_chain_lock()
+    assert active is False
+
+
+def test_repeat_click_step():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="repeat_click", params={
+        "button": "left", "x": 100, "y": 200, "count": 3, "interval_ms": 10
+    })]
+    profile = make_profile(steps)
+    with patch("mouse_lock.action_runner.cursor") as mock_cursor:
+        mock_cursor.repeat_click.return_value = 3
+        runner.run_profile(profile)
+        time.sleep(0.3)
+    mock_cursor.repeat_click.assert_called_once()
+
+
+def test_status_messages_during_run():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="wait", params={"ms": 50})]
+    profile = make_profile(steps, name="Farm Spot")
+    runner.run_profile(profile)
+    time.sleep(0.01)
+    msg = state.get_status_message()
+    assert "Farm Spot" in msg or "Step" in msg or "Running" in msg
+    time.sleep(0.2)
