@@ -36,10 +36,14 @@ _PARAM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
         ("key", "Key", "w"),
         ("duration_ms", "Duration (ms, 0 = until stopped)", "500"),
     ],
+    "random_delay": [
+        ("min_ms", "Min delay (ms)", "50"),
+        ("max_ms", "Max delay (ms)", "200"),
+    ],
 }
 
 _NEEDS_POSITION = {"move", "click", "repeat_click", "lock", "scroll"}
-_INT_PARAMS = {"x", "y", "count", "interval_ms", "ms", "duration_ms", "amount"}
+_INT_PARAMS = {"x", "y", "count", "interval_ms", "ms", "duration_ms", "amount", "min_ms", "max_ms"}
 _ACTION_HINTS = {
     "move": "Move the cursor to an exact screen coordinate without clicking.",
     "click": "Trigger a single mouse click at a fixed position.",
@@ -49,6 +53,7 @@ _ACTION_HINTS = {
     "lock": "Temporarily or permanently keep the cursor pinned to one coordinate.",
     "scroll": "Scroll the mouse wheel at a position. Direction: up, down, left, right.",
     "hold_key": "Hold a key down for a duration in milliseconds. 0 = hold until chain stops.",
+    "random_delay": "Pause for a random duration between min and max milliseconds — adds human-like timing.",
 }
 
 
@@ -77,6 +82,8 @@ def _format_step(step: ActionStep) -> str:
         duration = params.get("duration_ms", 0)
         duration_label = "until stopped" if duration == 0 else f"{duration}ms"
         return f"hold_key '{params.get('key', '?')}' {duration_label}"
+    if step.action == "random_delay":
+        return f"random_delay {params.get('min_ms', '?')}–{params.get('max_ms', '?')}ms"
     return step.action
 
 

@@ -1,6 +1,7 @@
 """Execute action chains in a worker thread."""
 from __future__ import annotations
 
+import random
 import threading
 
 import keyboard
@@ -126,6 +127,10 @@ class ActionRunner:
                         self._stop_event.wait(timeout=duration_ms / 1000.0)
                 finally:
                     keyboard.release(p["key"])
+
+            elif step.action == "random_delay":
+                ms = random.randint(p["min_ms"], p["max_ms"])
+                self._stop_event.wait(timeout=ms / 1000.0)
 
             return True
         except Exception as exc:

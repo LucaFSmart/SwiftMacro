@@ -234,3 +234,14 @@ def test_hold_key_releases_on_stop():
         runner.stop()  # blocking — waits up to 2s for thread to finish
         mock_kb.press.assert_called_once_with("shift")
         mock_kb.release.assert_called_once_with("shift")
+
+
+def test_run_random_delay_step():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="random_delay", params={"min_ms": 10, "max_ms": 30})]
+    profile = make_profile(steps)
+    runner.run_profile(profile)
+    time.sleep(0.3)
+    assert not runner.is_running()
+    assert "Done" in state.get_status_message()
