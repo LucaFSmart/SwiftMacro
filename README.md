@@ -1,4 +1,4 @@
-# Mouse Lock Tool
+# SwiftMacro
 
 A Windows desktop utility with a modern, profile-first control-center UI for running reusable mouse and keyboard automation chains.
 
@@ -11,11 +11,11 @@ py -m pip install -r requirements.txt
 ## Run
 
 ```bash
-py mouse_lock.py
+py swiftmacro.py
 # or
-py -m mouse_lock
+py -m swiftmacro
 # or without console window on Windows
-pyw mouse_lock.pyw
+pyw swiftmacro.pyw
 ```
 
 The app now starts as a normal desktop window with a generated app icon for the title bar, taskbar, and system tray. Closing the window still minimizes it to the tray when the tray icon is available.
@@ -27,7 +27,7 @@ py -m pip install pyinstaller
 .\scripts\build_exe.ps1
 ```
 
-The packaged Windows executable is written to `dist\MouseLock.exe`.
+The packaged Windows executable is written to `dist\SwiftMacro.exe`.
 
 ## Usage
 

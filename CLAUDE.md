@@ -1,4 +1,4 @@
-# Mouse Lock – CLAUDE.md
+# SwiftMacro – CLAUDE.md
 
 ## Commands
 
@@ -7,11 +7,11 @@
 py -m pip install -r requirements.txt
 
 # Run (with console)
-py mouse_lock.py
-py -m mouse_lock
+py swiftmacro.py
+py -m swiftmacro
 
 # Run (no console window – production mode)
-pyw mouse_lock.pyw
+pyw swiftmacro.pyw
 
 # Tests
 py -m pytest tests/ -q
@@ -19,17 +19,17 @@ py -m pytest tests/ -q
 # Build EXE (PowerShell)
 py -m pip install pyinstaller
 .\scripts\build_exe.ps1
-# Output: dist\MouseLock.exe
+# Output: dist\SwiftMacro.exe
 ```
 
 ## Architecture
 
 ```
-mouse_lock/
+swiftmacro/
   app.py              # Startup/shutdown wiring – assembles all components
   models.py           # ActionStep, Profile dataclasses + validation
   state.py            # AppState – thread-safe shared state
-  profile_store.py    # JSON persistence (~/.mouse_lock/profiles.json), atomic writes
+  profile_store.py    # JSON persistence (~/.swiftmacro/profiles.json), atomic writes
   action_runner.py    # Executes profile action chains in a background thread
   hotkeys.py          # HotkeyManager – global hotkeys + conflict detection
   lock_loop.py        # LockLoop – keeps cursor pinned during chain_lock_active
@@ -45,15 +45,15 @@ mouse_lock/
     theme.py          # Dark theme colors, fonts, ttk styles
 ```
 
-**Entry point:** `app.main()` ← called by `mouse_lock.py` and `mouse_lock.pyw`
+**Entry point:** `app.main()` ← called by `swiftmacro.py` and `swiftmacro.pyw`
 
-## Key Constants (`mouse_lock/constants.py`)
+## Key Constants (`swiftmacro/constants.py`)
 
 | Constant | Value | Notes |
 |---|---|---|
 | `MAX_PROFILES` | 5 | Hard cap on stored profiles |
 | `MAX_STEPS` | 50 | Hard cap per profile |
-| `PROFILES_FILE` | `~/.mouse_lock/profiles.json` | Persisted across runs |
+| `PROFILES_FILE` | `~/.swiftmacro/profiles.json` | Persisted across runs |
 | `HOTKEY_RUN` | `ctrl+alt+r` | Run active profile |
 | `HOTKEY_STOP_CHAIN` | `ctrl+alt+x` | Stop running chain |
 | `HOTKEY_EXIT` | `ctrl+alt+esc` | Emergency exit |
@@ -69,7 +69,7 @@ Valid actions: `move`, `click`, `repeat_click`, `keypress`, `wait`, `lock`
 ## Non-obvious Patterns
 
 - **Tray close behavior:** `WM_DELETE_WINDOW` calls `root.withdraw()` (hides), not destroy. Only exits if tray is unavailable.
-- **Single instance:** Uses a named Windows mutex (`Local\MouseLock.Desktop`). Second launch silently exits.
+- **Single instance:** Uses a named Windows mutex (`Local\SwiftMacro.Desktop`). Second launch silently exits.
 - **`_shutdown_ref`:** A `list[callable]` singleton in `hotkeys.py` shared by `tray.py` and `main_window.py` to avoid circular imports.
 - **Hotkey refresh:** After every profile add/edit/delete/import, call `hotkey_mgr.refresh_profile_hotkeys(profile_store.load())`.
 - **Import conflict resolution:** On import, conflicting hotkeys in incoming profiles are cleared (not rejected).
