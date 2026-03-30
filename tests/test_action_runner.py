@@ -245,3 +245,34 @@ def test_run_random_delay_step():
     time.sleep(0.3)
     assert not runner.is_running()
     assert "Done" in state.get_status_message()
+
+
+def test_profile_repeat_runs_chain_n_times():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="wait", params={"ms": 10})]
+    profile = make_profile(steps)
+    profile.repeat = 3
+    call_count = []
+    original = runner._execute_step
+    def counting_execute(step):
+        call_count.append(1)
+        return original(step)
+    runner._execute_step = counting_execute
+    runner.run_profile(profile)
+    time.sleep(0.5)
+    assert len(call_count) == 3, f"Expected 3 executions, got {len(call_count)}"
+
+
+def test_profile_repeat_zero_loops_until_stopped():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="wait", params={"ms": 10})]
+    profile = make_profile(steps)
+    profile.repeat = 0
+    runner.run_profile(profile)
+    time.sleep(0.05)
+    assert runner.is_running()
+    runner.stop()
+    time.sleep(0.2)
+    assert not runner.is_running()

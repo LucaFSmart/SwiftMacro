@@ -62,7 +62,7 @@ swiftmacro/
 
 ## Action Steps
 
-Valid actions: `move`, `click`, `repeat_click`, `keypress`, `wait`, `lock`
+Valid actions: `move`, `click`, `repeat_click`, `keypress`, `wait`, `lock`, `scroll`, `hold_key`, `random_delay`
 
 `lock` step with `duration_ms=0` pins the cursor permanently until the chain is stopped.
 

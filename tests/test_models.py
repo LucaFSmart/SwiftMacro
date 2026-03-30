@@ -168,3 +168,23 @@ def test_random_delay_step_min_greater_than_max_invalid():
 def test_random_delay_step_negative_min_invalid():
     step = ActionStep(action="random_delay", params={"min_ms": -1, "max_ms": 100})
     assert step.validate() is False
+
+
+def test_profile_default_repeat():
+    p = Profile.create_new(name="P", hotkey=None, steps=[])
+    assert p.repeat == 1
+
+
+def test_profile_repeat_serialization():
+    p = Profile.create_new(name="P", hotkey=None, steps=[])
+    p.repeat = 5
+    d = p.to_dict()
+    assert d["repeat"] == 5
+    p2 = Profile.from_dict(d)
+    assert p2.repeat == 5
+
+
+def test_profile_from_dict_without_repeat_defaults_to_1():
+    d = {"id": "abc", "name": "OldProfile", "hotkey": None, "steps": []}
+    p = Profile.from_dict(d)
+    assert p.repeat == 1

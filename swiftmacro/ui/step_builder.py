@@ -156,6 +156,15 @@ class StepBuilderDialog:
             row=1, column=1, sticky="ew", padx=(12, 0), pady=(8, 0)
         )
 
+        ttk.Label(details, text="Repeat (0 = loop forever)", style="SectionTitle.TLabel").grid(
+            row=0, column=2, sticky="w", padx=(12, 0)
+        )
+        initial_repeat = str(profile.repeat) if profile else "1"
+        self._repeat_var = tk.StringVar(value=initial_repeat)
+        ttk.Entry(details, textvariable=self._repeat_var, width=8).grid(
+            row=1, column=2, sticky="w", padx=(12, 0), pady=(8, 0)
+        )
+
         steps_panel = ttk.Frame(content, style="Card.TFrame", padding=(18, 18, 18, 18))
         steps_panel.grid(row=1, column=0, sticky="nsew", padx=(0, 12), pady=(14, 0))
         steps_panel.columnconfigure(0, weight=1)
@@ -456,6 +465,15 @@ class StepBuilderDialog:
                         )
                         return
 
+        repeat_raw = self._repeat_var.get().strip()
+        try:
+            repeat = int(repeat_raw)
+            if repeat < 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showwarning("Invalid", "Repeat must be a whole number \u2265 0")
+            return
+
         for index, step in enumerate(self._steps):
             if (
                 step.action == "lock"
@@ -472,8 +490,11 @@ class StepBuilderDialog:
             self._editing.name = name
             self._editing.hotkey = hotkey
             self._editing.steps = list(self._steps)
+            self._editing.repeat = repeat
             self.result = self._editing
         else:
-            self.result = Profile.create_new(name=name, hotkey=hotkey, steps=list(self._steps))
+            p = Profile.create_new(name=name, hotkey=hotkey, steps=list(self._steps))
+            p.repeat = repeat
+            self.result = p
 
         self.top.destroy()
