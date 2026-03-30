@@ -76,6 +76,13 @@ class ActionStep:
                 and self.params["duration_ms"] >= 0
             )
 
+        if self.action == "random_delay":
+            return (
+                _has_ints(self.params, "min_ms", "max_ms")
+                and self.params["min_ms"] >= 0
+                and self.params["max_ms"] >= self.params["min_ms"]
+            )
+
         return False
 
     def to_dict(self) -> dict:

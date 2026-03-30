@@ -148,3 +148,23 @@ def test_hold_key_step_negative_duration_invalid():
 def test_hold_key_step_empty_key_invalid():
     step = ActionStep(action="hold_key", params={"key": "", "duration_ms": 100})
     assert step.validate() is False
+
+
+def test_random_delay_step_valid():
+    step = ActionStep(action="random_delay", params={"min_ms": 100, "max_ms": 300})
+    assert step.validate() is True
+
+
+def test_random_delay_step_equal_bounds_valid():
+    step = ActionStep(action="random_delay", params={"min_ms": 200, "max_ms": 200})
+    assert step.validate() is True
+
+
+def test_random_delay_step_min_greater_than_max_invalid():
+    step = ActionStep(action="random_delay", params={"min_ms": 300, "max_ms": 100})
+    assert step.validate() is False
+
+
+def test_random_delay_step_negative_min_invalid():
+    step = ActionStep(action="random_delay", params={"min_ms": -1, "max_ms": 100})
+    assert step.validate() is False
