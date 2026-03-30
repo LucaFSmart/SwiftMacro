@@ -7,3 +7,4 @@ build/
 *.spec
 *.egg-info/
 .env
+.worktrees/
