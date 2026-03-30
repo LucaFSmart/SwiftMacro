@@ -208,3 +208,29 @@ def test_run_scroll_step():
         runner.run_profile(profile)
         time.sleep(0.2)
     mock_cursor.scroll.assert_called_once_with(100, 200, "down", 3)
+
+
+def test_run_hold_key_step():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="hold_key", params={"key": "w", "duration_ms": 50})]
+    profile = make_profile(steps)
+    with patch("swiftmacro.action_runner.keyboard") as mock_kb:
+        runner.run_profile(profile)
+        time.sleep(0.3)
+    mock_kb.press.assert_called_once_with("w")
+    mock_kb.release.assert_called_once_with("w")
+
+
+def test_hold_key_releases_on_stop():
+    """key must be released even when the chain is stopped mid-hold."""
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="hold_key", params={"key": "shift", "duration_ms": 5000})]
+    profile = make_profile(steps)
+    with patch("swiftmacro.action_runner.keyboard") as mock_kb:
+        runner.run_profile(profile)
+        time.sleep(0.05)
+        runner.stop()  # blocking — waits up to 2s for thread to finish
+        mock_kb.press.assert_called_once_with("shift")
+        mock_kb.release.assert_called_once_with("shift")

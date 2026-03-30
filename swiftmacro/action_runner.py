@@ -116,6 +116,17 @@ class ActionRunner:
                 else:
                     self._stop_event.wait(timeout=duration_ms / 1000.0)
 
+            elif step.action == "hold_key":
+                keyboard.press(p["key"])
+                try:
+                    duration_ms = p["duration_ms"]
+                    if duration_ms == 0:
+                        self._stop_event.wait()
+                    else:
+                        self._stop_event.wait(timeout=duration_ms / 1000.0)
+                finally:
+                    keyboard.release(p["key"])
+
             return True
         except Exception as exc:
             _log.warning("Step failed [%s]: %s", step.action, exc)

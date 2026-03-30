@@ -68,6 +68,14 @@ class ActionStep:
                 and self.params.get("direction") in VALID_SCROLL_DIRECTIONS
             )
 
+        if self.action == "hold_key":
+            key = self.params.get("key")
+            return (
+                isinstance(key, str) and key.strip() != ""
+                and _has_ints(self.params, "duration_ms")
+                and self.params["duration_ms"] >= 0
+            )
+
         return False
 
     def to_dict(self) -> dict:
