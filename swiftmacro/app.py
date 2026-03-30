@@ -53,10 +53,32 @@ def make_shutdown(
 
 
 def main() -> None:
+    import os
+    import sys
+
+    from swiftmacro.constants import APP_ID, APP_MUTEX_NAME, PROFILES_DIR
+    from swiftmacro.log import configure_logging, get_logger
+
     init_dpi_awareness()
     set_windows_app_id(APP_ID)
+
+    # Step 1: Ensure profile directory exists (must happen before logging)
+    profiles_dir = os.path.expanduser(PROFILES_DIR)
+    first_run = not os.path.isdir(profiles_dir)
+    os.makedirs(profiles_dir, exist_ok=True)
+
+    # Step 2: Configure logging (file handler now has a valid directory)
+    configure_logging(profiles_dir)
+    log = get_logger("app")
+
+    if first_run:
+        log.info("Profile directory initialized at %s", profiles_dir)
+    log.info("SwiftMacro starting up")
+
+    # Step 3: Single-instance guard
     instance_guard = acquire_single_instance(APP_MUTEX_NAME)
     if instance_guard.already_running:
+        log.warning("Another instance is already running — exiting")
         instance_guard.release()
         return
 
@@ -65,7 +87,7 @@ def main() -> None:
     state = make_state()
     root = tk.Tk()
     apply_window_icon(root)
-    profile_store = ProfileStore()
+    profile_store = ProfileStore()  # migration runs here in Task 6
     action_runner = ActionRunner(state)
 
     tray_mgr = TrayManager(state, root)
@@ -100,7 +122,10 @@ def main() -> None:
     hotkey_mgr.register_all()
     hotkey_mgr.refresh_profile_hotkeys(profile_store.load())
     hotkey_mgr.start()
+
+    log.info("Startup complete")
     try:
         root.mainloop()
     finally:
         shutdown_fn()
+        log.info("SwiftMacro shut down")

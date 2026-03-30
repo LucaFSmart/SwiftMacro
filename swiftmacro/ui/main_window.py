@@ -68,7 +68,7 @@ class MainWindow:
         ttk.Label(
             left,
             text=(
-                "Profile-first desktop automation for reusable click, keypress, wait and lock flows."
+                "Profile-first desktop automation for gamers and power users — build reusable click, keypress, wait and lock flows."
             ),
             style="HeroBody.TLabel",
             wraplength=520,
