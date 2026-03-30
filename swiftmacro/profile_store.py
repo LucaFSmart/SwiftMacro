@@ -8,8 +8,8 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-from mouse_lock.constants import MAX_PROFILES, SYSTEM_HOTKEYS
-from mouse_lock.models import Profile
+from swiftmacro.constants import MAX_PROFILES, SYSTEM_HOTKEYS
+from swiftmacro.models import Profile
 
 
 @dataclass
@@ -22,7 +22,7 @@ class ProfileImportResult:
 class ProfileStore:
     def __init__(self, profiles_dir: str | None = None) -> None:
         if profiles_dir is None:
-            from mouse_lock.constants import PROFILES_DIR
+            from swiftmacro.constants import PROFILES_DIR
             profiles_dir = os.path.expanduser(PROFILES_DIR)
         self._dir = Path(profiles_dir)
         self._file = self._dir / "profiles.json"

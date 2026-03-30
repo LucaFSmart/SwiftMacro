@@ -1,13 +1,13 @@
 """Global hotkey registration and management."""
 from __future__ import annotations
 
-from mouse_lock.constants import (
+from swiftmacro.constants import (
     HOTKEY_EXIT,
     HOTKEY_RUN,
     HOTKEY_STOP_CHAIN,
     SYSTEM_HOTKEYS,
 )
-from mouse_lock.state import AppState
+from swiftmacro.state import AppState
 
 
 # Mutable reference so HotkeyManager can call shutdown() without circular import

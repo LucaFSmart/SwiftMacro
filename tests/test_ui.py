@@ -1,0 +1,149 @@
+import tkinter as tk
+
+import pytest
+
+from swiftmacro.constants import MAX_STEPS
+from swiftmacro.models import ActionStep, Profile
+from swiftmacro.state import make_state
+from swiftmacro.ui.main_window import MainWindow
+from swiftmacro.ui.step_builder import StepBuilderDialog
+
+
+class _Store:
+    def __init__(self, profiles):
+        self._profiles = list(profiles)
+
+    def load(self):
+        return list(self._profiles)
+
+    def get_by_id(self, profile_id):
+        return next((p for p in self._profiles if p.id == profile_id), None)
+
+
+def _widget_state(widget) -> str:
+    return str(widget.cget("state"))
+
+
+def _make_profile():
+    return Profile(
+        id="p1",
+        name="Farm",
+        hotkey="ctrl+alt+1",
+        steps=[ActionStep(action="move", params={"x": 10, "y": 20})],
+    )
+
+
+@pytest.fixture(scope="module")
+def tk_root():
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        yield root
+    finally:
+        root.destroy()
+
+
+def test_main_window_buttons_disabled_without_active_profile(tk_root):
+    state = make_state()
+    ui = MainWindow(tk_root, state, tray_available=False, profile_store=_Store([_make_profile()]))
+    tk_root.update_idletasks()
+
+    assert _widget_state(ui._add_btn) == "normal"
+    assert _widget_state(ui._edit_btn) == "disabled"
+    assert _widget_state(ui._duplicate_btn) == "disabled"
+    assert _widget_state(ui._delete_btn) == "disabled"
+    assert _widget_state(ui._run_btn) == "disabled"
+    assert _widget_state(ui._stop_btn) == "disabled"
+
+    for child in tk_root.winfo_children():
+        child.destroy()
+
+
+def test_main_window_stop_enabled_while_runner_busy(tk_root):
+    state = make_state()
+    profile = _make_profile()
+    state.set_active_profile_id(profile.id)
+    state.set_runner_busy(True)
+    ui = MainWindow(tk_root, state, tray_available=False, profile_store=_Store([profile]))
+    tk_root.update_idletasks()
+
+    assert _widget_state(ui._edit_btn) == "disabled"
+    assert _widget_state(ui._duplicate_btn) == "disabled"
+    assert _widget_state(ui._delete_btn) == "disabled"
+    assert _widget_state(ui._run_btn) == "disabled"
+    assert _widget_state(ui._stop_btn) == "normal"
+
+    for child in tk_root.winfo_children():
+        child.destroy()
+
+
+def test_main_window_profile_details_show_selected_profile(tk_root):
+    state = make_state()
+    profile = _make_profile()
+    state.set_active_profile_id(profile.id)
+    ui = MainWindow(tk_root, state, tray_available=True, profile_store=_Store([profile]))
+    tk_root.update_idletasks()
+
+    assert ui._selected_profile_name.cget("text") == "Farm"
+    assert "Hotkey: ctrl+alt+1" in ui._selected_profile_meta.cget("text")
+    assert "Move to 10, 20" in ui._selected_profile_steps.cget("text")
+    assert ui._tray_chip.cget("text") == "Tray Ready"
+
+    for child in tk_root.winfo_children():
+        child.destroy()
+
+
+def test_step_builder_pick_button_visibility_changes_by_action(tk_root):
+    dialog = StepBuilderDialog(tk_root, _Store([]))
+    tk_root.update_idletasks()
+    assert dialog._pick_btn.winfo_manager() == "pack"
+
+    dialog._on_action_change("keypress")
+    tk_root.update_idletasks()
+    assert dialog._pick_btn.winfo_manager() == ""
+
+    dialog.top.destroy()
+
+
+def test_step_builder_can_edit_existing_step(tk_root):
+    profile = Profile(
+        id="p2",
+        name="Edit Me",
+        hotkey=None,
+        steps=[ActionStep(action="move", params={"x": 10, "y": 20})],
+    )
+    dialog = StepBuilderDialog(tk_root, _Store([]), profile)
+    dialog._steps_listbox.selection_set(0)
+    dialog._on_step_select(None)
+    dialog._param_vars["x"].set("99")
+    dialog._param_vars["y"].set("88")
+
+    dialog._add_step()
+
+    assert len(dialog._steps) == 1
+    assert dialog._steps[0].params == {"x": 99, "y": 88}
+    assert dialog._add_step_btn.cget("text") == "+ Add Step"
+
+    dialog.top.destroy()
+
+
+def test_step_builder_can_edit_when_profile_is_at_max_steps(tk_root):
+    profile = Profile(
+        id="p3",
+        name="Full",
+        hotkey=None,
+        steps=[ActionStep(action="wait", params={"ms": 1}) for _ in range(MAX_STEPS)],
+    )
+    dialog = StepBuilderDialog(tk_root, _Store([]), profile)
+    tk_root.update_idletasks()
+
+    assert _widget_state(dialog._add_step_btn) == "disabled"
+
+    dialog._steps_listbox.selection_set(0)
+    dialog._on_step_select(None)
+    tk_root.update_idletasks()
+
+    assert dialog._add_step_btn.cget("text") == "Save Step"
+    assert _widget_state(dialog._add_step_btn) == "normal"
+
+    dialog.top.destroy()

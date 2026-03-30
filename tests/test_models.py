@@ -1,5 +1,5 @@
 import uuid
-from mouse_lock.models import ActionStep, Profile, VALID_ACTIONS, REQUIRED_PARAMS
+from swiftmacro.models import ActionStep, Profile, VALID_ACTIONS, REQUIRED_PARAMS
 
 
 def test_action_step_creation():

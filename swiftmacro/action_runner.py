@@ -5,9 +5,9 @@ import threading
 
 import keyboard
 
-from mouse_lock import cursor
-from mouse_lock.models import ActionStep, Profile
-from mouse_lock.state import AppState
+from swiftmacro import cursor
+from swiftmacro.models import ActionStep, Profile
+from swiftmacro.state import AppState
 
 
 class ActionRunner:
