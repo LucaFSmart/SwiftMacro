@@ -9,7 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from swiftmacro.constants import MAX_PROFILES, SYSTEM_HOTKEYS
+from swiftmacro.log import get_logger
 from swiftmacro.models import Profile
+
+_log = get_logger("profile_store")
 
 
 @dataclass
@@ -20,27 +23,62 @@ class ProfileImportResult:
 
 
 class ProfileStore:
-    def __init__(self, profiles_dir: str | None = None) -> None:
+    def __init__(self, profiles_dir: str | None = None, legacy_dir: str | None = None) -> None:
         if profiles_dir is None:
             from swiftmacro.constants import PROFILES_DIR
             profiles_dir = os.path.expanduser(PROFILES_DIR)
+        if legacy_dir is None:
+            from swiftmacro.constants import PROFILES_DIR_LEGACY
+            legacy_dir = os.path.expanduser(PROFILES_DIR_LEGACY)
+
         self._dir = Path(profiles_dir)
+        self._legacy_dir = Path(legacy_dir)
         self._file = self._dir / "profiles.json"
         self._lock = threading.Lock()
         self._profiles: list[Profile] = []
         self._ensure_dir()
+        self._maybe_migrate()
         self._profiles = self._load_from_disk()
 
     def _ensure_dir(self) -> None:
         os.makedirs(self._dir, exist_ok=True)
 
+    def _maybe_migrate(self) -> None:
+        """Migrate profiles from the legacy ~/.mouse_lock location if needed."""
+        import shutil
+        import tempfile as _tempfile
+
+        legacy_file = self._legacy_dir / "profiles.json"
+        if self._file.exists() or not legacy_file.exists():
+            return
+
+        tmp_path_str = None
+        try:
+            tmp_fd, tmp_path_str = _tempfile.mkstemp(dir=str(self._dir), suffix=".tmp")
+            os.close(tmp_fd)
+            shutil.copy2(str(legacy_file), tmp_path_str)
+            os.replace(tmp_path_str, str(self._file))
+            _log.info("Migrated profiles from %s to %s", legacy_file, self._file)
+            tmp_path_str = None  # consumed by os.replace
+        except Exception as exc:
+            _log.error("Profile migration failed: %s", exc)
+            if tmp_path_str is not None and os.path.exists(tmp_path_str):
+                try:
+                    os.unlink(tmp_path_str)
+                except OSError:
+                    pass
+
     def _load_from_disk(self) -> list[Profile]:
         if not self._file.exists():
+            _log.info("No profiles file found at %s — starting empty", self._file)
             return []
         try:
             data = json.loads(self._file.read_text(encoding="utf-8"))
-            return [Profile.from_dict(d) for d in data]
-        except Exception:
+            profiles = [Profile.from_dict(d) for d in data]
+            _log.info("Loaded %d profile(s) from %s", len(profiles), self._file)
+            return profiles
+        except Exception as exc:
+            _log.warning("Failed to load profiles from %s: %s", self._file, exc)
             return []
 
     def _save_to_disk(self) -> None:
@@ -50,11 +88,13 @@ class ProfileStore:
             with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             os.replace(tmp_path, str(self._file))
-        except Exception:
+            _log.debug("Saved %d profile(s) to %s", len(data), self._file)
+        except Exception as exc:
             try:
                 os.unlink(tmp_path)
             except OSError:
                 pass
+            _log.error("Failed to save profiles to %s: %s", self._file, exc)
             raise
 
     def load(self) -> list[Profile]:
