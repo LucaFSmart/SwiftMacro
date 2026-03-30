@@ -8,7 +8,7 @@ def test_constants_importable():
         SYSTEM_HOTKEYS,
     )
     assert LOCK_INTERVAL_MS == 15
-    assert MAX_PROFILES == 5
+    assert MAX_PROFILES == 20
     assert MAX_STEPS == 50
     assert HOTKEY_EXIT == "ctrl+alt+esc"
     assert HOTKEY_RUN == "ctrl+alt+r"

@@ -52,11 +52,11 @@ def test_delete_profile(store, sample_profile):
 
 
 def test_max_profiles(store):
-    for i in range(5):
+    for i in range(20):
         p = Profile.create_new(name=f"P{i}", hotkey=None, steps=[])
         store.add_profile(p)
     with pytest.raises(ValueError, match="Max"):
-        store.add_profile(Profile.create_new(name="P6", hotkey=None, steps=[]))
+        store.add_profile(Profile.create_new(name="P21", hotkey=None, steps=[]))
 
 
 def test_corrupted_json(store, tmp_path):

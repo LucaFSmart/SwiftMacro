@@ -17,7 +17,7 @@ UI_POLL_MS = 200
 ICON_SIZE = 64
 
 # Limits
-MAX_PROFILES = 5
+MAX_PROFILES = 20
 MAX_STEPS = 50
 
 # File paths (expanded at runtime via os.path.expanduser)
