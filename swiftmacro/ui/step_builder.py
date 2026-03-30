@@ -32,6 +32,10 @@ _PARAM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
         ("direction", "Direction", "down"),
         ("amount", "Amount (notches)", "3"),
     ],
+    "hold_key": [
+        ("key", "Key", "w"),
+        ("duration_ms", "Duration (ms, 0 = until stopped)", "500"),
+    ],
 }
 
 _NEEDS_POSITION = {"move", "click", "repeat_click", "lock", "scroll"}
@@ -44,6 +48,7 @@ _ACTION_HINTS = {
     "wait": "Pause the chain for a short or long delay in milliseconds.",
     "lock": "Temporarily or permanently keep the cursor pinned to one coordinate.",
     "scroll": "Scroll the mouse wheel at a position. Direction: up, down, left, right.",
+    "hold_key": "Hold a key down for a duration in milliseconds. 0 = hold until chain stops.",
 }
 
 
@@ -68,6 +73,10 @@ def _format_step(step: ActionStep) -> str:
         return f"lock ({params.get('x', '?')}, {params.get('y', '?')}) {duration_label}"
     if step.action == "scroll":
         return f"scroll {params.get('direction', '?')} x{params.get('amount', '?')} @ ({params.get('x', '?')}, {params.get('y', '?')})"
+    if step.action == "hold_key":
+        duration = params.get("duration_ms", 0)
+        duration_label = "until stopped" if duration == 0 else f"{duration}ms"
+        return f"hold_key '{params.get('key', '?')}' {duration_label}"
     return step.action
 
 

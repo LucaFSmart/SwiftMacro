@@ -128,3 +128,23 @@ def test_scroll_step_invalid_amount():
 def test_scroll_step_missing_param():
     step = ActionStep(action="scroll", params={"x": 0, "y": 0, "direction": "up"})
     assert step.validate() is False
+
+
+def test_hold_key_step_valid():
+    step = ActionStep(action="hold_key", params={"key": "w", "duration_ms": 500})
+    assert step.validate() is True
+
+
+def test_hold_key_step_zero_duration_valid():
+    step = ActionStep(action="hold_key", params={"key": "space", "duration_ms": 0})
+    assert step.validate() is True
+
+
+def test_hold_key_step_negative_duration_invalid():
+    step = ActionStep(action="hold_key", params={"key": "w", "duration_ms": -1})
+    assert step.validate() is False
+
+
+def test_hold_key_step_empty_key_invalid():
+    step = ActionStep(action="hold_key", params={"key": "", "duration_ms": 100})
+    assert step.validate() is False
