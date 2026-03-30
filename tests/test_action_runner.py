@@ -196,3 +196,15 @@ def test_run_profile_sets_and_clears_runner_busy():
 
     time.sleep(0.3)
     assert state.get_runner_busy() is False, "runner_busy should be False after completion"
+
+
+def test_run_scroll_step():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="scroll", params={"x": 100, "y": 200, "direction": "down", "amount": 3})]
+    profile = make_profile(steps)
+    with patch("swiftmacro.action_runner.cursor") as mock_cursor:
+        mock_cursor.scroll.return_value = True
+        runner.run_profile(profile)
+        time.sleep(0.2)
+    mock_cursor.scroll.assert_called_once_with(100, 200, "down", 3)

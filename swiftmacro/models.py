@@ -5,8 +5,9 @@ import uuid
 from dataclasses import dataclass, field
 
 
-VALID_ACTIONS = {"move", "click", "repeat_click", "keypress", "wait", "lock"}
+VALID_ACTIONS = {"move", "click", "repeat_click", "keypress", "wait", "lock", "scroll", "hold_key", "random_delay"}
 VALID_BUTTONS = {"left", "right", "middle"}
+VALID_SCROLL_DIRECTIONS = {"up", "down", "left", "right"}
 
 REQUIRED_PARAMS: dict[str, set[str]] = {
     "move": {"x", "y"},
@@ -15,6 +16,9 @@ REQUIRED_PARAMS: dict[str, set[str]] = {
     "keypress": {"key"},
     "wait": {"ms"},
     "lock": {"x", "y", "duration_ms"},
+    "scroll": {"x", "y", "direction", "amount"},
+    "hold_key": {"key", "duration_ms"},
+    "random_delay": {"min_ms", "max_ms"},
 }
 
 
@@ -55,6 +59,13 @@ class ActionStep:
             return (
                 _has_ints(self.params, "x", "y", "duration_ms")
                 and self.params["duration_ms"] >= 0
+            )
+
+        if self.action == "scroll":
+            return (
+                _has_ints(self.params, "x", "y", "amount")
+                and self.params["amount"] > 0
+                and self.params.get("direction") in VALID_SCROLL_DIRECTIONS
             )
 
         return False

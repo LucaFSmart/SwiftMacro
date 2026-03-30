@@ -50,7 +50,10 @@ def test_profile_create_new_generates_uuid():
 
 
 def test_valid_actions_complete():
-    assert VALID_ACTIONS == {"move", "click", "repeat_click", "keypress", "wait", "lock"}
+    assert VALID_ACTIONS == {
+        "move", "click", "repeat_click", "keypress", "wait", "lock",
+        "scroll", "hold_key", "random_delay",
+    }
 
 
 def test_required_params_defined():
@@ -61,6 +64,12 @@ def test_required_params_defined():
     assert "count" in REQUIRED_PARAMS["repeat_click"]
     assert "duration_ms" in REQUIRED_PARAMS["lock"]
     assert "key" in REQUIRED_PARAMS["keypress"]
+    assert "direction" in REQUIRED_PARAMS["scroll"]
+    assert "amount" in REQUIRED_PARAMS["scroll"]
+    assert "key" in REQUIRED_PARAMS["hold_key"]
+    assert "duration_ms" in REQUIRED_PARAMS["hold_key"]
+    assert "min_ms" in REQUIRED_PARAMS["random_delay"]
+    assert "max_ms" in REQUIRED_PARAMS["random_delay"]
 
 
 def test_action_step_validate_valid():
@@ -98,4 +107,24 @@ def test_action_step_validate_rejects_invalid_repeat_click_values():
 
 def test_action_step_validate_rejects_invalid_button():
     step = ActionStep(action="click", params={"button": "bad", "x": 1, "y": 2})
+    assert step.validate() is False
+
+
+def test_scroll_step_valid():
+    step = ActionStep(action="scroll", params={"x": 0, "y": 0, "direction": "down", "amount": 3})
+    assert step.validate() is True
+
+
+def test_scroll_step_invalid_direction():
+    step = ActionStep(action="scroll", params={"x": 0, "y": 0, "direction": "diagonal", "amount": 3})
+    assert step.validate() is False
+
+
+def test_scroll_step_invalid_amount():
+    step = ActionStep(action="scroll", params={"x": 0, "y": 0, "direction": "up", "amount": 0})
+    assert step.validate() is False
+
+
+def test_scroll_step_missing_param():
+    step = ActionStep(action="scroll", params={"x": 0, "y": 0, "direction": "up"})
     assert step.validate() is False

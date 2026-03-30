@@ -68,3 +68,23 @@ def repeat_click(
         if stop_event.wait(timeout=interval_ms / 1000.0):
             break
     return completed
+
+
+MOUSEEVENTF_WHEEL = 0x0800
+MOUSEEVENTF_HWHEEL = 0x1000
+WHEEL_DELTA = 120
+
+
+def scroll(x: int, y: int, direction: str, amount: int) -> bool:
+    """Scroll at (x, y). direction: up/down/left/right. amount: notch count."""
+    try:
+        ctypes.windll.user32.SetCursorPos(x, y)
+        if direction in ("up", "down"):
+            delta = WHEEL_DELTA * amount * (1 if direction == "up" else -1)
+            ctypes.windll.user32.mouse_event(MOUSEEVENTF_WHEEL, 0, 0, delta, 0)
+        else:
+            delta = WHEEL_DELTA * amount * (1 if direction == "right" else -1)
+            ctypes.windll.user32.mouse_event(MOUSEEVENTF_HWHEEL, 0, 0, delta, 0)
+        return True
+    except Exception:
+        return False
