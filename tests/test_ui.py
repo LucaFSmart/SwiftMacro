@@ -127,6 +127,30 @@ def test_step_builder_can_edit_existing_step(tk_root):
     dialog.top.destroy()
 
 
+def test_step_builder_has_repeat_field(tk_root):
+    """StepBuilderDialog must expose _repeat_var."""
+    dlg = StepBuilderDialog(tk_root, _Store([]))
+    assert hasattr(dlg, "_repeat_var"), "StepBuilderDialog must have _repeat_var"
+    dlg.top.destroy()
+
+
+def test_step_builder_repeat_defaults_to_1(tk_root):
+    dlg = StepBuilderDialog(tk_root, _Store([]))
+    assert dlg._repeat_var.get() == "1"
+    dlg.top.destroy()
+
+
+def test_step_builder_repeat_loaded_from_existing_profile(tk_root):
+    profile = Profile(
+        id="p1", name="Test", hotkey=None,
+        steps=[ActionStep(action="move", params={"x": 0, "y": 0})],
+        repeat=7,
+    )
+    dlg = StepBuilderDialog(tk_root, _Store([profile]), profile=profile)
+    assert dlg._repeat_var.get() == "7"
+    dlg.top.destroy()
+
+
 def test_step_builder_can_edit_when_profile_is_at_max_steps(tk_root):
     profile = Profile(
         id="p3",

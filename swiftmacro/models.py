@@ -99,6 +99,7 @@ class Profile:
     name: str
     hotkey: str | None
     steps: list[ActionStep]
+    repeat: int = 1
 
     @classmethod
     def create_new(cls, name: str, hotkey: str | None, steps: list[ActionStep]) -> Profile:
@@ -110,12 +111,19 @@ class Profile:
             "name": self.name,
             "hotkey": self.hotkey,
             "steps": [s.to_dict() for s in self.steps],
+            "repeat": self.repeat,
         }
 
     @classmethod
     def from_dict(cls, d: dict) -> Profile:
         steps = [ActionStep.from_dict(s) for s in d["steps"]]
-        return cls(id=d["id"], name=d["name"], hotkey=d.get("hotkey"), steps=steps)
+        return cls(
+            id=d["id"],
+            name=d["name"],
+            hotkey=d.get("hotkey"),
+            steps=steps,
+            repeat=d.get("repeat", 1),
+        )
 
 
 def _has_ints(params: dict, *keys: str) -> bool:

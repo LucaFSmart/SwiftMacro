@@ -54,35 +54,49 @@ class ActionRunner:
             return self._running
 
     def _execute_chain(self, profile: Profile) -> None:
-        had_error = False
-        _log.info("Chain started: %s (%d steps)", profile.name, len(profile.steps))
+        _log.info("Chain started: %s (%d steps, repeat=%s)", profile.name, len(profile.steps), profile.repeat)
+        iteration = 0
         try:
             self._state.set_status_message(f"Running: {profile.name}")
-            for i, step in enumerate(profile.steps):
+            while True:
                 if self._stop_event.is_set():
                     break
+                had_error = self._run_pass(profile)
+                iteration += 1
+                if had_error:
+                    break
+                if profile.repeat != 0 and iteration >= profile.repeat:
+                    # Ran the requested number of times, no errors
+                    if profile.repeat == 1:
+                        self._state.set_status_message("Done")
+                    else:
+                        self._state.set_status_message(f"Done ({iteration}x)")
+                    _log.info("Chain completed: %s (%d iterations)", profile.name, iteration)
+                    break
 
-                if not step.validate():
-                    self._state.set_status_message(f"Step {i+1}/{len(profile.steps)}: invalid params")
-                    had_error = True
-                    continue
-
-                self._state.set_status_message(
-                    f"Step {i+1}/{len(profile.steps)}: {step.action}"
-                )
-                if not self._execute_step(step):
-                    had_error = True
-
-            if not self._stop_event.is_set() and not had_error:
-                self._state.set_status_message("Done")
-                _log.info("Chain completed: %s", profile.name)
-            else:
-                _log.info("Chain stopped/errored: %s", profile.name)
+            if self._stop_event.is_set():
+                _log.info("Chain stopped: %s", profile.name)
         finally:
             self._state.set_chain_lock(False)
             self._state.set_runner_busy(False)
             with self._lock:
                 self._running = False
+
+    def _run_pass(self, profile: Profile) -> bool:
+        """Run all steps once. Returns True if any step had an error."""
+        had_error = False
+        n = len(profile.steps)
+        for i, step in enumerate(profile.steps):
+            if self._stop_event.is_set():
+                return had_error
+            if not step.validate():
+                self._state.set_status_message(f"Step {i+1}/{n}: invalid params")
+                had_error = True
+                continue
+            self._state.set_status_message(f"Step {i+1}/{n}: {step.action}")
+            if not self._execute_step(step):
+                had_error = True
+        return had_error
 
     def _execute_step(self, step: ActionStep) -> bool:
         p = step.params
