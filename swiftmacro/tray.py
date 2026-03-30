@@ -41,9 +41,9 @@ class TrayManager:
                 ),
             )
             self._icon = pystray.Icon(
-                name="MouseLock",
+                name="SwiftMacro",
                 icon=icon_image,
-                title="Mouse Lock",
+                title="SwiftMacro",
                 menu=menu,
             )
             self._icon.default_action = lambda icon, item: self._root.after(
