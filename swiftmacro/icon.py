@@ -71,7 +71,7 @@ def create_tray_icon() -> "Image.Image":
 
 def ensure_windows_icon_file() -> str:
     """Create an .ico file in the temp directory for Windows shell integrations."""
-    icon_path = os.path.join(tempfile.gettempdir(), "mouse_lock_app.ico")
+    icon_path = os.path.join(tempfile.gettempdir(), "swiftmacro_app.ico")
     icon_image = _draw_icon(256)
     icon_image.save(
         icon_path,
@@ -107,7 +107,7 @@ def apply_window_icon(root) -> bool:
 
         icon_photo = ImageTk.PhotoImage(_draw_icon(128))
         root.iconphoto(True, icon_photo)
-        root._mouse_lock_icon = icon_photo
+        root._swiftmacro_icon = icon_photo
         success = True
     except Exception:
         pass
