@@ -99,6 +99,9 @@ class ActionRunner:
                     self._stop_event,
                 )
 
+            elif step.action == "scroll":
+                cursor.scroll(p["x"], p["y"], p["direction"], p["amount"])
+
             elif step.action == "keypress":
                 keyboard.press_and_release(p["key"])
 

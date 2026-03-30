@@ -26,10 +26,16 @@ _PARAM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
         ("y", "Y", "0"),
         ("duration_ms", "Duration (ms, 0 = forever)", "0"),
     ],
+    "scroll": [
+        ("x", "X", "0"),
+        ("y", "Y", "0"),
+        ("direction", "Direction", "down"),
+        ("amount", "Amount (notches)", "3"),
+    ],
 }
 
-_NEEDS_POSITION = {"move", "click", "repeat_click", "lock"}
-_INT_PARAMS = {"x", "y", "count", "interval_ms", "ms", "duration_ms"}
+_NEEDS_POSITION = {"move", "click", "repeat_click", "lock", "scroll"}
+_INT_PARAMS = {"x", "y", "count", "interval_ms", "ms", "duration_ms", "amount"}
 _ACTION_HINTS = {
     "move": "Move the cursor to an exact screen coordinate without clicking.",
     "click": "Trigger a single mouse click at a fixed position.",
@@ -37,6 +43,7 @@ _ACTION_HINTS = {
     "keypress": "Send one keyboard key or named key like enter, tab or space.",
     "wait": "Pause the chain for a short or long delay in milliseconds.",
     "lock": "Temporarily or permanently keep the cursor pinned to one coordinate.",
+    "scroll": "Scroll the mouse wheel at a position. Direction: up, down, left, right.",
 }
 
 
@@ -59,6 +66,8 @@ def _format_step(step: ActionStep) -> str:
         duration = params.get("duration_ms", 0)
         duration_label = "forever" if duration == 0 else f"{duration}ms"
         return f"lock ({params.get('x', '?')}, {params.get('y', '?')}) {duration_label}"
+    if step.action == "scroll":
+        return f"scroll {params.get('direction', '?')} x{params.get('amount', '?')} @ ({params.get('x', '?')}, {params.get('y', '?')})"
     return step.action
 
 

@@ -1,6 +1,6 @@
 import threading
 from unittest.mock import patch, MagicMock
-from swiftmacro.cursor import get_cursor_pos, set_cursor_pos, click, repeat_click
+from swiftmacro.cursor import get_cursor_pos, set_cursor_pos, click, repeat_click, scroll
 
 
 def test_get_cursor_pos_success():
@@ -84,3 +84,28 @@ def test_repeat_click_interrupted():
         mock_ct.windll.user32.mouse_event.return_value = None
         completed = repeat_click("left", 100, 200, count=100, interval_ms=10, stop_event=stop)
     assert completed < 100
+
+
+def test_scroll_vertical_calls_mouse_event():
+    with patch("swiftmacro.cursor.ctypes") as mock_ctypes:
+        mock_ctypes.windll.user32.SetCursorPos.return_value = True
+        mock_ctypes.windll.user32.mouse_event.return_value = None
+        result = scroll(100, 200, "down", 3)
+    assert result is True
+    mock_ctypes.windll.user32.mouse_event.assert_called_once()
+
+
+def test_scroll_horizontal_calls_mouse_event():
+    with patch("swiftmacro.cursor.ctypes") as mock_ctypes:
+        mock_ctypes.windll.user32.SetCursorPos.return_value = True
+        mock_ctypes.windll.user32.mouse_event.return_value = None
+        result = scroll(0, 0, "left", 2)
+    assert result is True
+    mock_ctypes.windll.user32.mouse_event.assert_called_once()
+
+
+def test_scroll_returns_false_on_exception():
+    with patch("swiftmacro.cursor.ctypes") as mock_ctypes:
+        mock_ctypes.windll.user32.SetCursorPos.side_effect = Exception("fail")
+        result = scroll(0, 0, "up", 1)
+    assert result is False
