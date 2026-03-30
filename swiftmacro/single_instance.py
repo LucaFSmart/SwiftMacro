@@ -5,6 +5,10 @@ import ctypes
 import os
 from dataclasses import dataclass
 
+from swiftmacro.log import get_logger
+
+_log = get_logger("single_instance")
+
 ERROR_ALREADY_EXISTS = 183
 
 
@@ -31,4 +35,6 @@ def acquire_single_instance(name: str) -> SingleInstanceGuard:
 
     handle = ctypes.windll.kernel32.CreateMutexW(None, False, name)
     already_running = ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS
+    if already_running:
+        _log.warning("Another SwiftMacro instance is already running")
     return SingleInstanceGuard(handle=handle, already_running=already_running)
