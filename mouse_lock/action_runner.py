@@ -36,16 +36,21 @@ class ActionRunner:
         self._thread.start()
 
     def stop(self) -> None:
+        was_running = self.is_running()
         self._stop_event.set()
         t = self._thread
         if t is not None:
             t.join(timeout=2.0)
+        self._thread = None
+        if was_running and not self.is_running():
+            self._state.set_status_message("Stopped")
 
     def is_running(self) -> bool:
         with self._lock:
             return self._running
 
     def _execute_chain(self, profile: Profile) -> None:
+        had_error = False
         try:
             self._state.set_status_message(f"Running: {profile.name}")
             for i, step in enumerate(profile.steps):
@@ -53,15 +58,17 @@ class ActionRunner:
                     break
 
                 if not step.validate():
-                    self._state.set_status_message(f"Step {i+1}: invalid params")
+                    self._state.set_status_message(f"Step {i+1}/{len(profile.steps)}: invalid params")
+                    had_error = True
                     continue
 
                 self._state.set_status_message(
                     f"Step {i+1}/{len(profile.steps)}: {step.action}"
                 )
-                self._execute_step(step)
+                if not self._execute_step(step):
+                    had_error = True
 
-            if not self._stop_event.is_set():
+            if not self._stop_event.is_set() and not had_error:
                 self._state.set_status_message("Done")
         finally:
             self._state.set_chain_lock(False)
@@ -69,7 +76,7 @@ class ActionRunner:
             with self._lock:
                 self._running = False
 
-    def _execute_step(self, step: ActionStep) -> None:
+    def _execute_step(self, step: ActionStep) -> bool:
         p = step.params
         try:
             if step.action == "move":
@@ -99,5 +106,7 @@ class ActionRunner:
                 else:
                     self._stop_event.wait(timeout=duration_ms / 1000.0)
 
+            return True
         except Exception:
             self._state.set_status_message(f"Step failed: {step.action}")
+            return False

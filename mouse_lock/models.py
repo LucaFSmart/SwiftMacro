@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 
 VALID_ACTIONS = {"move", "click", "repeat_click", "keypress", "wait", "lock"}
+VALID_BUTTONS = {"left", "right", "middle"}
 
 REQUIRED_PARAMS: dict[str, set[str]] = {
     "move": {"x", "y"},
@@ -26,7 +27,37 @@ class ActionStep:
         if self.action not in VALID_ACTIONS:
             return False
         required = REQUIRED_PARAMS.get(self.action, set())
-        return required.issubset(self.params.keys())
+        if not required.issubset(self.params.keys()):
+            return False
+
+        if self.action == "move":
+            return _has_ints(self.params, "x", "y")
+
+        if self.action == "click":
+            return _has_valid_button(self.params) and _has_ints(self.params, "x", "y")
+
+        if self.action == "repeat_click":
+            return (
+                _has_valid_button(self.params)
+                and _has_ints(self.params, "x", "y", "count", "interval_ms")
+                and self.params["count"] > 0
+                and self.params["interval_ms"] >= 0
+            )
+
+        if self.action == "keypress":
+            key = self.params.get("key")
+            return isinstance(key, str) and key.strip() != ""
+
+        if self.action == "wait":
+            return _has_ints(self.params, "ms") and self.params["ms"] >= 0
+
+        if self.action == "lock":
+            return (
+                _has_ints(self.params, "x", "y", "duration_ms")
+                and self.params["duration_ms"] >= 0
+            )
+
+        return False
 
     def to_dict(self) -> dict:
         return {"action": self.action, "params": dict(self.params)}
@@ -59,3 +90,11 @@ class Profile:
     def from_dict(cls, d: dict) -> Profile:
         steps = [ActionStep.from_dict(s) for s in d["steps"]]
         return cls(id=d["id"], name=d["name"], hotkey=d.get("hotkey"), steps=steps)
+
+
+def _has_ints(params: dict, *keys: str) -> bool:
+    return all(isinstance(params.get(key), int) for key in keys)
+
+
+def _has_valid_button(params: dict) -> bool:
+    return params.get("button") in VALID_BUTTONS

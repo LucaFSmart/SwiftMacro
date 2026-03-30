@@ -76,3 +76,26 @@ def test_action_step_validate_missing_param():
 def test_action_step_validate_unknown_action():
     step = ActionStep(action="explode", params={})
     assert step.validate() is False
+
+
+def test_action_step_validate_rejects_negative_wait():
+    step = ActionStep(action="wait", params={"ms": -1})
+    assert step.validate() is False
+
+
+def test_action_step_validate_rejects_negative_lock_duration():
+    step = ActionStep(action="lock", params={"x": 10, "y": 20, "duration_ms": -5})
+    assert step.validate() is False
+
+
+def test_action_step_validate_rejects_invalid_repeat_click_values():
+    step = ActionStep(
+        action="repeat_click",
+        params={"button": "left", "x": 1, "y": 2, "count": 0, "interval_ms": -1},
+    )
+    assert step.validate() is False
+
+
+def test_action_step_validate_rejects_invalid_button():
+    step = ActionStep(action="click", params={"button": "bad", "x": 1, "y": 2})
+    assert step.validate() is False

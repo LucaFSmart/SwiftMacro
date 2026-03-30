@@ -1,4 +1,4 @@
-"""Compatibility script entry point."""
+"""Windows GUI launcher without console window."""
 from mouse_lock.app import main
 
 

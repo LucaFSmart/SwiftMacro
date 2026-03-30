@@ -140,3 +140,24 @@ def test_status_messages_during_run():
     msg = state.get_status_message()
     assert "Farm Spot" in msg or "Step" in msg or "Running" in msg
     time.sleep(0.2)
+
+
+def test_failed_step_status_is_not_overwritten_by_done():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="keypress", params={"key": "enter"})]
+    profile = make_profile(steps, name="Broken")
+    with patch("mouse_lock.action_runner.keyboard.press_and_release", side_effect=RuntimeError("boom")):
+        runner.run_profile(profile)
+        time.sleep(0.2)
+    assert state.get_status_message() == "Step failed: keypress"
+
+
+def test_semantically_invalid_step_does_not_finish_as_done():
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="wait", params={"ms": -10})]
+    profile = make_profile(steps, name="Invalid")
+    runner.run_profile(profile)
+    time.sleep(0.2)
+    assert "invalid params" in state.get_status_message()
