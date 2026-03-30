@@ -5,7 +5,7 @@ import ctypes
 import os
 import tempfile
 
-from mouse_lock.constants import APP_ID, ICON_SIZE
+from swiftmacro.constants import APP_ID, ICON_SIZE
 
 
 def _draw_icon(size: int) -> "Image.Image":

@@ -2,8 +2,8 @@ import threading
 import time
 from unittest.mock import patch
 
-from mouse_lock.lock_loop import LockLoop
-from mouse_lock.state import make_state
+from swiftmacro.lock_loop import LockLoop
+from swiftmacro.state import make_state
 
 
 def test_lock_loop_exits_on_stop_event():
@@ -18,7 +18,7 @@ def test_lock_loop_exits_on_stop_event():
 
 def test_lock_loop_does_not_move_when_inactive():
     state = make_state()
-    with patch("mouse_lock.lock_loop.ctypes") as mock_ct:
+    with patch("swiftmacro.lock_loop.ctypes") as mock_ct:
         loop = LockLoop(state)
         t = threading.Thread(target=loop.run, daemon=True)
         t.start()
@@ -33,7 +33,7 @@ def test_chain_lock_moves_cursor():
     state.set_chain_lock(True, (500, 300))
     calls = []
 
-    with patch("mouse_lock.lock_loop.ctypes") as mock_ct:
+    with patch("swiftmacro.lock_loop.ctypes") as mock_ct:
         mock_ct.windll.user32.SetCursorPos.side_effect = lambda x, y: calls.append((x, y))
         loop = LockLoop(state)
         t = threading.Thread(target=loop.run, daemon=True)

@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import threading
 
-from mouse_lock.hotkeys import _shutdown_ref
-from mouse_lock.icon import create_tray_icon
-from mouse_lock.state import AppState
+from swiftmacro.hotkeys import _shutdown_ref
+from swiftmacro.icon import create_tray_icon
+from swiftmacro.state import AppState
 
 
 def show_window(root) -> None:

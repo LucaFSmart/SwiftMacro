@@ -1,4 +1,4 @@
-from mouse_lock.state import make_state
+from swiftmacro.state import make_state
 
 
 def test_initial_state():

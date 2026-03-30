@@ -1,8 +1,8 @@
 import json
 import os
 import pytest
-from mouse_lock.models import Profile, ActionStep
-from mouse_lock.profile_store import ProfileImportResult, ProfileStore
+from swiftmacro.models import Profile, ActionStep
+from swiftmacro.profile_store import ProfileImportResult, ProfileStore
 
 
 @pytest.fixture

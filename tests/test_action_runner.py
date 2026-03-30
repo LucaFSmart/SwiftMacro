@@ -1,9 +1,9 @@
 import threading
 import time
 from unittest.mock import patch, MagicMock
-from mouse_lock.state import make_state
-from mouse_lock.models import ActionStep, Profile
-from mouse_lock.action_runner import ActionRunner
+from swiftmacro.state import make_state
+from swiftmacro.models import ActionStep, Profile
+from swiftmacro.action_runner import ActionRunner
 
 
 def make_profile(steps, name="Test"):
@@ -24,7 +24,7 @@ def test_run_move_step():
     runner = ActionRunner(state)
     steps = [ActionStep(action="move", params={"x": 100, "y": 200})]
     profile = make_profile(steps)
-    with patch("mouse_lock.action_runner.cursor") as mock_cursor:
+    with patch("swiftmacro.action_runner.cursor") as mock_cursor:
         mock_cursor.set_cursor_pos.return_value = True
         runner.run_profile(profile)
         time.sleep(0.2)
@@ -36,7 +36,7 @@ def test_run_click_step():
     runner = ActionRunner(state)
     steps = [ActionStep(action="click", params={"button": "left", "x": 50, "y": 60})]
     profile = make_profile(steps)
-    with patch("mouse_lock.action_runner.cursor") as mock_cursor:
+    with patch("swiftmacro.action_runner.cursor") as mock_cursor:
         mock_cursor.click.return_value = True
         runner.run_profile(profile)
         time.sleep(0.2)
@@ -58,7 +58,7 @@ def test_run_keypress_step():
     runner = ActionRunner(state)
     steps = [ActionStep(action="keypress", params={"key": "enter"})]
     profile = make_profile(steps)
-    with patch("mouse_lock.action_runner.keyboard") as mock_kb:
+    with patch("swiftmacro.action_runner.keyboard") as mock_kb:
         runner.run_profile(profile)
         time.sleep(0.2)
     mock_kb.press_and_release.assert_called_with("enter")
@@ -95,7 +95,7 @@ def test_invalid_params_skipped():
     runner = ActionRunner(state)
     steps = [ActionStep(action="move", params={"x": 100})]  # missing y
     profile = make_profile(steps)
-    with patch("mouse_lock.action_runner.cursor") as mock_cursor:
+    with patch("swiftmacro.action_runner.cursor") as mock_cursor:
         runner.run_profile(profile)
         time.sleep(0.2)
     mock_cursor.set_cursor_pos.assert_not_called()
@@ -123,7 +123,7 @@ def test_repeat_click_step():
         "button": "left", "x": 100, "y": 200, "count": 3, "interval_ms": 10
     })]
     profile = make_profile(steps)
-    with patch("mouse_lock.action_runner.cursor") as mock_cursor:
+    with patch("swiftmacro.action_runner.cursor") as mock_cursor:
         mock_cursor.repeat_click.return_value = 3
         runner.run_profile(profile)
         time.sleep(0.3)
@@ -147,7 +147,7 @@ def test_failed_step_status_is_not_overwritten_by_done():
     runner = ActionRunner(state)
     steps = [ActionStep(action="keypress", params={"key": "enter"})]
     profile = make_profile(steps, name="Broken")
-    with patch("mouse_lock.action_runner.keyboard.press_and_release", side_effect=RuntimeError("boom")):
+    with patch("swiftmacro.action_runner.keyboard.press_and_release", side_effect=RuntimeError("boom")):
         runner.run_profile(profile)
         time.sleep(0.2)
     assert state.get_status_message() == "Step failed: keypress"

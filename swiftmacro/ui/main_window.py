@@ -4,10 +4,10 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from mouse_lock.constants import APP_NAME, MAX_PROFILES, UI_POLL_MS
-from mouse_lock.hotkeys import _shutdown_ref
-from mouse_lock.state import AppState
-from mouse_lock.ui.theme import COLORS, HEADING_FONT, MONO_FONT, configure_theme, style_listbox
+from swiftmacro.constants import APP_NAME, MAX_PROFILES, UI_POLL_MS
+from swiftmacro.hotkeys import _shutdown_ref
+from swiftmacro.state import AppState
+from swiftmacro.ui.theme import COLORS, HEADING_FONT, MONO_FONT, configure_theme, style_listbox
 
 
 class MainWindow:
@@ -438,7 +438,7 @@ class MainWindow:
     def _cmd_add(self) -> None:
         if self._profile_store is None:
             return
-        from mouse_lock.ui.step_builder import StepBuilderDialog
+        from swiftmacro.ui.step_builder import StepBuilderDialog
 
         dialog = StepBuilderDialog(self._root, self._profile_store)
         self._root.wait_window(dialog.top)
@@ -458,7 +458,7 @@ class MainWindow:
         if profile is None:
             self._state.set_status_message("No profile selected")
             return
-        from mouse_lock.ui.step_builder import StepBuilderDialog
+        from swiftmacro.ui.step_builder import StepBuilderDialog
 
         dialog = StepBuilderDialog(self._root, self._profile_store, profile)
         self._root.wait_window(dialog.top)

@@ -1,6 +1,6 @@
 from PIL import Image
-from mouse_lock.icon import create_tray_icon
-from mouse_lock.constants import ICON_SIZE
+from swiftmacro.icon import create_tray_icon
+from swiftmacro.constants import ICON_SIZE
 
 
 def test_create_tray_icon_returns_image():

@@ -4,10 +4,10 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from mouse_lock.constants import MAX_STEPS, SYSTEM_HOTKEYS
-from mouse_lock.cursor import get_cursor_pos
-from mouse_lock.models import ActionStep, Profile, VALID_ACTIONS
-from mouse_lock.ui.theme import COLORS, MONO_FONT, configure_theme, style_listbox
+from swiftmacro.constants import MAX_STEPS, SYSTEM_HOTKEYS
+from swiftmacro.cursor import get_cursor_pos
+from swiftmacro.models import ActionStep, Profile, VALID_ACTIONS
+from swiftmacro.ui.theme import COLORS, MONO_FONT, configure_theme, style_listbox
 
 _PARAM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
     "move": [("x", "X", "0"), ("y", "Y", "0")],

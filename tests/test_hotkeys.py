@@ -1,7 +1,7 @@
 from unittest.mock import patch, MagicMock
-from mouse_lock.state import make_state
-from mouse_lock.hotkeys import HotkeyManager
-from mouse_lock.models import Profile
+from swiftmacro.state import make_state
+from swiftmacro.hotkeys import HotkeyManager
+from swiftmacro.models import Profile
 
 
 def test_failed_hotkey_registration_stored_in_state():

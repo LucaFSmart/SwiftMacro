@@ -1,17 +1,17 @@
 """Application startup and shutdown wiring."""
 from __future__ import annotations
 
-from mouse_lock.action_runner import ActionRunner
-from mouse_lock.constants import APP_ID, APP_MUTEX_NAME
-from mouse_lock.dpi import init_dpi_awareness
-from mouse_lock.hotkeys import HotkeyManager, _shutdown_ref
-from mouse_lock.icon import apply_window_icon, set_windows_app_id
-from mouse_lock.lock_loop import LockLoop
-from mouse_lock.profile_store import ProfileStore
-from mouse_lock.single_instance import SingleInstanceGuard, acquire_single_instance
-from mouse_lock.state import AppState, make_state
-from mouse_lock.tray import TrayManager
-from mouse_lock.ui.main_window import MainWindow
+from swiftmacro.action_runner import ActionRunner
+from swiftmacro.constants import APP_ID, APP_MUTEX_NAME
+from swiftmacro.dpi import init_dpi_awareness
+from swiftmacro.hotkeys import HotkeyManager, _shutdown_ref
+from swiftmacro.icon import apply_window_icon, set_windows_app_id
+from swiftmacro.lock_loop import LockLoop
+from swiftmacro.profile_store import ProfileStore
+from swiftmacro.single_instance import SingleInstanceGuard, acquire_single_instance
+from swiftmacro.state import AppState, make_state
+from swiftmacro.tray import TrayManager
+from swiftmacro.ui.main_window import MainWindow
 
 
 def make_shutdown(

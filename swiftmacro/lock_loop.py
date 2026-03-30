@@ -4,8 +4,8 @@ from __future__ import annotations
 import ctypes
 import threading
 
-from mouse_lock.constants import LOCK_INTERVAL_MS
-from mouse_lock.state import AppState
+from swiftmacro.constants import LOCK_INTERVAL_MS
+from swiftmacro.state import AppState
 
 
 class LockLoop:
