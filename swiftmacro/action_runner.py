@@ -6,8 +6,11 @@ import threading
 import keyboard
 
 from swiftmacro import cursor
+from swiftmacro.log import get_logger
 from swiftmacro.models import ActionStep, Profile
 from swiftmacro.state import AppState
+
+_log = get_logger("action_runner")
 
 
 class ActionRunner:
@@ -51,6 +54,7 @@ class ActionRunner:
 
     def _execute_chain(self, profile: Profile) -> None:
         had_error = False
+        _log.info("Chain started: %s (%d steps)", profile.name, len(profile.steps))
         try:
             self._state.set_status_message(f"Running: {profile.name}")
             for i, step in enumerate(profile.steps):
@@ -70,6 +74,9 @@ class ActionRunner:
 
             if not self._stop_event.is_set() and not had_error:
                 self._state.set_status_message("Done")
+                _log.info("Chain completed: %s", profile.name)
+            else:
+                _log.info("Chain stopped/errored: %s", profile.name)
         finally:
             self._state.set_chain_lock(False)
             self._state.set_runner_busy(False)
@@ -107,6 +114,7 @@ class ActionRunner:
                     self._stop_event.wait(timeout=duration_ms / 1000.0)
 
             return True
-        except Exception:
+        except Exception as exc:
+            _log.warning("Step failed [%s]: %s", step.action, exc)
             self._state.set_status_message(f"Step failed: {step.action}")
             return False
