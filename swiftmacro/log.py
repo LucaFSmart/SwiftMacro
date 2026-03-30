@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from logging.handlers import RotatingFileHandler
 
 
@@ -18,15 +19,16 @@ def configure_logging(profiles_dir: str) -> None:
     Production mode (sys.stdout is None — .pyw / PyInstaller --noconsole):
         Rotating file handler → <profiles_dir>/swiftmacro.log, level INFO.
     Development mode (all other cases):
-        basicConfig to stderr, level DEBUG.
-    """
-    import sys
+        StreamHandler to stderr, level DEBUG.
 
+    Idempotent: calling this function more than once is safe.
+    """
     root = logging.getLogger("swiftmacro")
+    if root.handlers:
+        return
     root.setLevel(logging.DEBUG)
 
     if sys.stdout is None:
-        # Production: write to rotating log file
         log_path = os.path.join(profiles_dir, "swiftmacro.log")
         handler = RotatingFileHandler(
             log_path,
@@ -40,8 +42,8 @@ def configure_logging(profiles_dir: str) -> None:
         )
         root.addHandler(handler)
     else:
-        # Development: log to console
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format="%(levelname)s %(name)s: %(message)s",
-        )
+        # Development: log to console directly on the swiftmacro logger
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+        root.addHandler(handler)
