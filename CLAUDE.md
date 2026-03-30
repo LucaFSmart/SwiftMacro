@@ -51,7 +51,7 @@ swiftmacro/
 
 | Constant | Value | Notes |
 |---|---|---|
-| `MAX_PROFILES` | 5 | Hard cap on stored profiles |
+| `MAX_PROFILES` | 20 | Hard cap on stored profiles |
 | `MAX_STEPS` | 50 | Hard cap per profile |
 | `PROFILES_FILE` | `~/.swiftmacro/profiles.json` | Persisted across runs |
 | `HOTKEY_RUN` | `ctrl+alt+r` | Run active profile |
