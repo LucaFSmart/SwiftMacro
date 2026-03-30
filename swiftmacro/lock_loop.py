@@ -5,7 +5,10 @@ import ctypes
 import threading
 
 from swiftmacro.constants import LOCK_INTERVAL_MS
+from swiftmacro.log import get_logger
 from swiftmacro.state import AppState
+
+_log = get_logger("lock_loop")
 
 
 class LockLoop:
@@ -38,10 +41,12 @@ class LockLoop:
             return self._thread
         self._thread = threading.Thread(target=self.run, name="LockLoop", daemon=True)
         self._thread.start()
+        _log.debug("LockLoop started")
         return self._thread
 
     def stop(self, timeout: float = 2.0) -> None:
         self._state.stop_event.set()
+        _log.debug("LockLoop stopped")
         thread = self._thread
         if thread is not None:
             thread.join(timeout=timeout)

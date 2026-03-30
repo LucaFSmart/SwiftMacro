@@ -1,6 +1,7 @@
 """Global hotkey registration and management."""
 from __future__ import annotations
 
+from swiftmacro.log import get_logger
 from swiftmacro.constants import (
     HOTKEY_EXIT,
     HOTKEY_RUN,
@@ -9,6 +10,7 @@ from swiftmacro.constants import (
 )
 from swiftmacro.state import AppState
 
+_log = get_logger("hotkeys")
 
 # Mutable reference so HotkeyManager can call shutdown() without circular import
 _shutdown_ref: list = [lambda: None]
@@ -41,7 +43,9 @@ class HotkeyManager:
             try:
                 keyboard.add_hotkey(combo, callback, suppress=False)
                 self._registered.append(combo)
+                _log.info("Registered system hotkey: %s", combo)
             except Exception as exc:
+                _log.warning("Failed to register system hotkey %s: %s", combo, exc)
                 self._system_errors.append(f"{combo}: {exc}")
         self._sync_errors()
 
@@ -50,8 +54,8 @@ class HotkeyManager:
         for combo in self._registered + self._profile_hotkeys:
             try:
                 keyboard.remove_hotkey(combo)
-            except Exception:
-                pass
+            except Exception as exc:
+                _log.debug("Could not remove hotkey %s: %s", combo, exc)
         try:
             keyboard.unhook_all_hotkeys()
             keyboard.unhook_all()
@@ -82,6 +86,7 @@ class HotkeyManager:
                 continue
             hk = profile.hotkey.lower()
             if hk in SYSTEM_HOTKEYS or hk in seen:
+                _log.warning("Hotkey conflict for profile '%s': %s", profile.name, hk)
                 self._profile_errors.append(
                     f"{profile.hotkey}: conflicts with existing hotkey"
                 )
@@ -94,7 +99,9 @@ class HotkeyManager:
                     suppress=False,
                 )
                 self._profile_hotkeys.append(profile.hotkey)
+                _log.info("Registered profile hotkey %s for '%s'", profile.hotkey, profile.name)
             except Exception as exc:
+                _log.warning("Failed to register profile hotkey %s: %s", profile.hotkey, exc)
                 self._profile_errors.append(f"{profile.hotkey}: {exc}")
         self._sync_errors()
 
