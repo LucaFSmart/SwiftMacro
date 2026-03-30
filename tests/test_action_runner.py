@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 from unittest.mock import patch, MagicMock
@@ -161,3 +162,37 @@ def test_semantically_invalid_step_does_not_finish_as_done():
     runner.run_profile(profile)
     time.sleep(0.2)
     assert "invalid params" in state.get_status_message()
+
+
+def test_execute_step_exception_logs_warning(caplog):
+    """When a step raises an exception, a WARNING must be logged."""
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="keypress", params={"key": "enter"})]
+    profile = make_profile(steps)
+
+    with caplog.at_level(logging.WARNING, logger="swiftmacro.action_runner"):
+        with patch("swiftmacro.action_runner.keyboard.press_and_release",
+                   side_effect=RuntimeError("boom")):
+            runner.run_profile(profile)
+            time.sleep(0.3)
+
+    assert any(r.levelno >= logging.WARNING for r in caplog.records), \
+        f"Expected WARNING log, got: {[(r.levelname, r.message) for r in caplog.records]}"
+
+
+def test_run_profile_sets_and_clears_runner_busy():
+    """runner_busy must be True during execution and False when done.
+    Note: get_runner_busy() already exists on AppState (state.py).
+    """
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="wait", params={"ms": 100})]
+    profile = make_profile(steps)
+
+    runner.run_profile(profile)
+    time.sleep(0.02)
+    assert state.get_runner_busy() is True, "runner_busy should be True during execution"
+
+    time.sleep(0.3)
+    assert state.get_runner_busy() is False, "runner_busy should be False after completion"
