@@ -7,8 +7,8 @@ from swiftmacro.profile_store import ProfileImportResult, ProfileStore
 
 @pytest.fixture
 def store(tmp_path):
-    """ProfileStore pointing at a temp directory."""
-    return ProfileStore(profiles_dir=str(tmp_path))
+    """ProfileStore pointing at a temp directory (no legacy migration)."""
+    return ProfileStore(profiles_dir=str(tmp_path), legacy_dir=str(tmp_path / "legacy_nonexistent"))
 
 
 @pytest.fixture
@@ -102,7 +102,7 @@ def test_duplicate_profile_creates_copy_without_hotkey(store, sample_profile):
 
 
 def test_export_profiles_writes_selected_profile(tmp_path, sample_profile):
-    store = ProfileStore(profiles_dir=str(tmp_path / "profiles"))
+    store = ProfileStore(profiles_dir=str(tmp_path / "profiles"), legacy_dir=str(tmp_path / "legacy_nonexistent"))
     store.add_profile(sample_profile)
     export_path = tmp_path / "export.json"
 
@@ -115,7 +115,7 @@ def test_export_profiles_writes_selected_profile(tmp_path, sample_profile):
 
 
 def test_import_profiles_adds_profiles_and_clears_conflicting_hotkeys(tmp_path):
-    store = ProfileStore(profiles_dir=str(tmp_path / "profiles"))
+    store = ProfileStore(profiles_dir=str(tmp_path / "profiles"), legacy_dir=str(tmp_path / "legacy_nonexistent"))
     existing = Profile.create_new(
         name="Existing",
         hotkey="ctrl+alt+1",
@@ -156,7 +156,7 @@ def test_import_profiles_adds_profiles_and_clears_conflicting_hotkeys(tmp_path):
 
 
 def test_import_profiles_skips_invalid_profiles(tmp_path):
-    store = ProfileStore(profiles_dir=str(tmp_path / "profiles"))
+    store = ProfileStore(profiles_dir=str(tmp_path / "profiles"), legacy_dir=str(tmp_path / "legacy_nonexistent"))
     import_path = tmp_path / "import_invalid.json"
     import_path.write_text(
         json.dumps(
@@ -177,3 +177,86 @@ def test_import_profiles_skips_invalid_profiles(tmp_path):
     assert result.imported_ids == []
     assert result.skipped_invalid == 1
     assert store.load() == []
+
+
+import logging
+
+
+def test_load_returns_empty_on_corrupt_file_and_logs_warning(tmp_path, caplog):
+    """Corrupt JSON must return [] AND log a WARNING."""
+    (tmp_path / "profiles.json").write_text("not valid json{{{", encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="swiftmacro.profile_store"):
+        store = ProfileStore(profiles_dir=str(tmp_path), legacy_dir=str(tmp_path / "legacy_nonexistent"))
+    assert store.load() == []
+    assert any(
+        r.levelno >= logging.WARNING and (
+            "profiles.json" in r.message.lower() or
+            "parse" in r.message.lower() or
+            "json" in r.message.lower() or
+            "load" in r.message.lower()
+        )
+        for r in caplog.records
+    ), f"Expected a WARNING about corrupt JSON, got: {[r.message for r in caplog.records]}"
+
+
+def test_export_then_import_roundtrip(tmp_path, sample_profile):
+    """Export a profile and re-import it; result must be identical."""
+    store = ProfileStore(profiles_dir=str(tmp_path / "profiles"), legacy_dir=str(tmp_path / "legacy_nonexistent"))
+    store.add_profile(sample_profile)
+
+    export_path = tmp_path / "export.json"
+    store.export_profiles(str(export_path))
+
+    store2 = ProfileStore(profiles_dir=str(tmp_path / "profiles2"), legacy_dir=str(tmp_path / "legacy_nonexistent"))
+    result = store2.import_profiles(str(export_path))
+
+    assert len(result.imported_ids) == 1
+    loaded = store2.load()
+    assert loaded[0].name == sample_profile.name
+    assert len(loaded[0].steps) == len(sample_profile.steps)
+    assert loaded[0].steps[0].action == sample_profile.steps[0].action
+
+
+import shutil as _shutil_module
+
+
+def test_migrate_profiles_on_first_launch(tmp_path, caplog):
+    """If old ~/.mouse_lock/profiles.json exists and new path does not, profiles are migrated."""
+    old_dir = tmp_path / "old"
+    new_dir = tmp_path / "new"
+    old_dir.mkdir()
+    old_file = old_dir / "profiles.json"
+    old_file.write_text(
+        '[{"id":"abc","name":"Migrated","hotkey":null,"steps":[{"action":"wait","params":{"ms":100}}]}]',
+        encoding="utf-8",
+    )
+    with caplog.at_level(logging.INFO, logger="swiftmacro.profile_store"):
+        store = ProfileStore(profiles_dir=str(new_dir), legacy_dir=str(old_dir))
+
+    assert (new_dir / "profiles.json").exists(), "New profiles.json should have been created"
+    assert old_file.exists(), "Old file must NOT be deleted"
+    profiles = store.load()
+    assert len(profiles) == 1
+    assert profiles[0].name == "Migrated"
+    assert any("migrat" in r.message.lower() for r in caplog.records), \
+        f"Expected migration INFO log, got: {[r.message for r in caplog.records]}"
+
+
+def test_migrate_profiles_failure_leaves_no_partial_file(tmp_path, caplog, monkeypatch):
+    """If migration copy raises, no partial file is left at destination."""
+    old_dir = tmp_path / "old"
+    new_dir = tmp_path / "new"
+    old_dir.mkdir()
+    (old_dir / "profiles.json").write_text("[]", encoding="utf-8")
+    new_dir.mkdir()
+
+    import shutil as _shutil
+    monkeypatch.setattr(_shutil, "copy2", lambda *a, **kw: (_ for _ in ()).throw(OSError("disk full")))
+
+    with caplog.at_level(logging.ERROR, logger="swiftmacro.profile_store"):
+        store = ProfileStore(profiles_dir=str(new_dir), legacy_dir=str(old_dir))
+
+    assert not (new_dir / "profiles.json").exists(), "No partial file should remain"
+    assert store.load() == []
+    assert any(r.levelno >= logging.ERROR for r in caplog.records), \
+        f"Expected ERROR log on migration failure, got: {[r.message for r in caplog.records]}"
