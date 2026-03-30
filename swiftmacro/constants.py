@@ -1,8 +1,8 @@
 """All application constants."""
 
-APP_NAME = "Mouse Lock"
-APP_ID = "MouseLock.Desktop"
-APP_MUTEX_NAME = "Local\\MouseLock.Desktop"
+APP_NAME = "SwiftMacro"
+APP_ID = "SwiftMacro.Desktop"
+APP_MUTEX_NAME = "Local\\SwiftMacro.Desktop"
 
 # System hotkeys
 HOTKEY_EXIT = "ctrl+alt+esc"
@@ -21,8 +21,12 @@ MAX_PROFILES = 5
 MAX_STEPS = 50
 
 # File paths (expanded at runtime via os.path.expanduser)
-PROFILES_DIR = "~/.mouse_lock"
-PROFILES_FILE = "~/.mouse_lock/profiles.json"
+PROFILES_DIR = "~/.swiftmacro"
+PROFILES_FILE = "~/.swiftmacro/profiles.json"
+
+# Legacy path for migration
+PROFILES_DIR_LEGACY = "~/.mouse_lock"
+PROFILES_FILE_LEGACY = "~/.mouse_lock/profiles.json"
 
 # All system hotkeys for conflict detection
 SYSTEM_HOTKEYS = frozenset({
