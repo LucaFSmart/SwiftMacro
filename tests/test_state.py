@@ -3,8 +3,6 @@ from mouse_lock.state import make_state
 
 def test_initial_state():
     s = make_state()
-    assert s.get_saved_pos() is None
-    assert s.get_lock_active() is False
     assert s.get_status_message() == ""
     assert s.get_hotkey_errors() == []
     assert s.get_active_profile_id() is None
@@ -12,31 +10,6 @@ def test_initial_state():
     active, pos = s.get_chain_lock()
     assert active is False
     assert pos is None
-
-
-def test_set_saved_pos():
-    s = make_state()
-    s.set_saved_pos((100, 200))
-    assert s.get_saved_pos() == (100, 200)
-
-
-def test_set_saved_pos_sets_status():
-    s = make_state()
-    s.set_saved_pos((10, 20))
-    assert s.get_status_message() == "Position saved"
-
-
-def test_toggle_lock_on():
-    s = make_state()
-    s.toggle_lock()
-    assert s.get_lock_active() is True
-
-
-def test_toggle_lock_off():
-    s = make_state()
-    s.toggle_lock()
-    s.toggle_lock()
-    assert s.get_lock_active() is False
 
 
 def test_set_status_message():
@@ -47,8 +20,8 @@ def test_set_status_message():
 
 def test_add_hotkey_error():
     s = make_state()
-    s.add_hotkey_error("ctrl+alt+s failed")
-    assert "ctrl+alt+s failed" in s.get_hotkey_errors()
+    s.add_hotkey_error("ctrl+alt+r failed")
+    assert "ctrl+alt+r failed" in s.get_hotkey_errors()
 
 
 def test_add_multiple_hotkey_errors():
@@ -56,6 +29,13 @@ def test_add_multiple_hotkey_errors():
     s.add_hotkey_error("err1")
     s.add_hotkey_error("err2")
     assert len(s.get_hotkey_errors()) == 2
+
+
+def test_set_hotkey_errors_replaces_existing_list():
+    s = make_state()
+    s.add_hotkey_error("old")
+    s.set_hotkey_errors(["new1", "new2"])
+    assert s.get_hotkey_errors() == ["new1", "new2"]
 
 
 def test_active_profile_id():

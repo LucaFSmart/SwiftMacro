@@ -7,8 +7,6 @@ from dataclasses import dataclass, field
 
 @dataclass
 class AppState:
-    saved_pos: tuple[int, int] | None
-    lock_active: bool
     stop_event: threading.Event
     hotkey_errors: list[str]
     status_message: str
@@ -17,26 +15,6 @@ class AppState:
     chain_lock_active: bool
     chain_lock_pos: tuple[int, int] | None
     _lock: threading.Lock = field(repr=False)
-
-    # --- saved position ---
-    def get_saved_pos(self) -> tuple[int, int] | None:
-        with self._lock:
-            return self.saved_pos
-
-    def set_saved_pos(self, pos: tuple[int, int]) -> None:
-        with self._lock:
-            self.saved_pos = pos
-            self.status_message = "Position saved"
-
-    # --- lock ---
-    def get_lock_active(self) -> bool:
-        with self._lock:
-            return self.lock_active
-
-    def toggle_lock(self) -> bool:
-        with self._lock:
-            self.lock_active = not self.lock_active
-            return self.lock_active
 
     # --- status message ---
     def get_status_message(self) -> str:
@@ -51,6 +29,10 @@ class AppState:
     def get_hotkey_errors(self) -> list[str]:
         with self._lock:
             return list(self.hotkey_errors)
+
+    def set_hotkey_errors(self, errors: list[str]) -> None:
+        with self._lock:
+            self.hotkey_errors = list(errors)
 
     def add_hotkey_error(self, error: str) -> None:
         with self._lock:
@@ -86,10 +68,8 @@ class AppState:
 
 
 def make_state() -> AppState:
-    """Factory — creates a fresh AppState with sensible defaults."""
+    """Factory creates a fresh AppState with sensible defaults."""
     return AppState(
-        saved_pos=None,
-        lock_active=False,
         stop_event=threading.Event(),
         hotkey_errors=[],
         status_message="",

@@ -1,9 +1,10 @@
 """All application constants."""
 
+APP_NAME = "Mouse Lock"
+APP_ID = "MouseLock.Desktop"
+APP_MUTEX_NAME = "Local\\MouseLock.Desktop"
+
 # System hotkeys
-HOTKEY_SAVE = "ctrl+alt+s"
-HOTKEY_MOVE = "ctrl+alt+m"
-HOTKEY_TOGGLE = "ctrl+alt+t"
 HOTKEY_EXIT = "ctrl+alt+esc"
 
 # Profile hotkeys
@@ -25,6 +26,5 @@ PROFILES_FILE = "~/.mouse_lock/profiles.json"
 
 # All system hotkeys for conflict detection
 SYSTEM_HOTKEYS = frozenset({
-    HOTKEY_SAVE, HOTKEY_MOVE, HOTKEY_TOGGLE, HOTKEY_EXIT,
-    HOTKEY_RUN, HOTKEY_STOP_CHAIN,
+    HOTKEY_EXIT, HOTKEY_RUN, HOTKEY_STOP_CHAIN,
 })

@@ -1,13 +1,12 @@
 """Global hotkey registration and management."""
 from __future__ import annotations
 
-import threading
-
 from mouse_lock.constants import (
-    HOTKEY_SAVE, HOTKEY_MOVE, HOTKEY_TOGGLE, HOTKEY_EXIT,
-    HOTKEY_RUN, HOTKEY_STOP_CHAIN, SYSTEM_HOTKEYS,
+    HOTKEY_EXIT,
+    HOTKEY_RUN,
+    HOTKEY_STOP_CHAIN,
+    SYSTEM_HOTKEYS,
 )
-from mouse_lock.cursor import get_cursor_pos, set_cursor_pos
 from mouse_lock.state import AppState
 
 
@@ -23,14 +22,17 @@ class HotkeyManager:
         self._profile_store = profile_store
         self._registered: list[str] = []
         self._profile_hotkeys: list[str] = []
+        self._system_errors: list[str] = []
+        self._profile_errors: list[str] = []
+
+    def _sync_errors(self) -> None:
+        self._state.set_hotkey_errors(self._system_errors + self._profile_errors)
 
     def register_all(self) -> None:
         import keyboard
+        self._system_errors = []
 
         bindings = [
-            (HOTKEY_SAVE, self._on_save),
-            (HOTKEY_MOVE, self._on_move),
-            (HOTKEY_TOGGLE, self._on_toggle),
             (HOTKEY_EXIT, self._on_exit),
             (HOTKEY_RUN, self._on_run),
             (HOTKEY_STOP_CHAIN, self._on_stop_chain),
@@ -40,7 +42,8 @@ class HotkeyManager:
                 keyboard.add_hotkey(combo, callback, suppress=False)
                 self._registered.append(combo)
             except Exception as exc:
-                self._state.add_hotkey_error(f"{combo}: {exc}")
+                self._system_errors.append(f"{combo}: {exc}")
+        self._sync_errors()
 
     def unregister_all(self) -> None:
         import keyboard
@@ -49,8 +52,16 @@ class HotkeyManager:
                 keyboard.remove_hotkey(combo)
             except Exception:
                 pass
+        try:
+            keyboard.unhook_all_hotkeys()
+            keyboard.unhook_all()
+        except Exception:
+            pass
         self._registered.clear()
         self._profile_hotkeys.clear()
+        self._profile_errors = []
+        self._system_errors = []
+        self._sync_errors()
 
     def refresh_profile_hotkeys(self, profiles) -> None:
         import keyboard
@@ -62,6 +73,7 @@ class HotkeyManager:
             except Exception:
                 pass
         self._profile_hotkeys.clear()
+        self._profile_errors = []
 
         # Register new ones (with conflict detection)
         seen: set[str] = set()
@@ -70,7 +82,7 @@ class HotkeyManager:
                 continue
             hk = profile.hotkey.lower()
             if hk in SYSTEM_HOTKEYS or hk in seen:
-                self._state.add_hotkey_error(
+                self._profile_errors.append(
                     f"{profile.hotkey}: conflicts with existing hotkey"
                 )
                 continue
@@ -83,30 +95,14 @@ class HotkeyManager:
                 )
                 self._profile_hotkeys.append(profile.hotkey)
             except Exception as exc:
-                self._state.add_hotkey_error(f"{profile.hotkey}: {exc}")
+                self._profile_errors.append(f"{profile.hotkey}: {exc}")
+        self._sync_errors()
 
-    def start(self) -> threading.Thread:
-        import keyboard
-        t = threading.Thread(target=keyboard.wait, name="HotkeyThread", daemon=True)
-        t.start()
-        return t
+    def start(self):
+        """No-op hook bootstrap kept for compatibility with the app wiring."""
+        return None
 
     # --- callbacks ---
-
-    def _on_save(self) -> None:
-        pos = get_cursor_pos()
-        if pos:
-            self._state.set_saved_pos(pos)
-
-    def _on_move(self) -> None:
-        pos = self._state.get_saved_pos()
-        if pos is None:
-            self._state.set_status_message("No position saved")
-            return
-        set_cursor_pos(pos[0], pos[1])
-
-    def _on_toggle(self) -> None:
-        self._state.toggle_lock()
 
     def _on_exit(self) -> None:
         self._root.after(0, _shutdown_ref[0])

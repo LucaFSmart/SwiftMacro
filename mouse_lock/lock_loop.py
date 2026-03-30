@@ -13,6 +13,7 @@ class LockLoop:
 
     def __init__(self, state: AppState) -> None:
         self._state = state
+        self._thread: threading.Thread | None = None
 
     def run(self) -> None:
         """Thread entry point. Exits when stop_event is set."""
@@ -26,15 +27,21 @@ class LockLoop:
             self._state.stop_event.wait(timeout=LOCK_INTERVAL_MS / 1000.0)
 
     def _get_target(self) -> tuple[int, int] | None:
-        """Determine cursor target using 3-case priority."""
+        """Determine cursor target from the active profile chain lock only."""
         chain_active, chain_pos = self._state.get_chain_lock()
         if chain_active and chain_pos is not None:
             return chain_pos
-        if self._state.get_lock_active():
-            return self._state.get_saved_pos()
         return None
 
     def start(self) -> threading.Thread:
-        t = threading.Thread(target=self.run, name="LockLoop", daemon=True)
-        t.start()
-        return t
+        if self._thread is not None and self._thread.is_alive():
+            return self._thread
+        self._thread = threading.Thread(target=self.run, name="LockLoop", daemon=True)
+        self._thread.start()
+        return self._thread
+
+    def stop(self, timeout: float = 2.0) -> None:
+        self._state.stop_event.set()
+        thread = self._thread
+        if thread is not None:
+            thread.join(timeout=timeout)

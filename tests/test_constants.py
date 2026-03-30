@@ -1,6 +1,6 @@
 def test_constants_importable():
     from mouse_lock.constants import (
-        HOTKEY_SAVE, HOTKEY_MOVE, HOTKEY_TOGGLE, HOTKEY_EXIT,
+        HOTKEY_EXIT,
         HOTKEY_RUN, HOTKEY_STOP_CHAIN,
         LOCK_INTERVAL_MS, UI_POLL_MS, ICON_SIZE,
         MAX_PROFILES, MAX_STEPS,
@@ -10,9 +10,10 @@ def test_constants_importable():
     assert LOCK_INTERVAL_MS == 15
     assert MAX_PROFILES == 5
     assert MAX_STEPS == 50
+    assert HOTKEY_EXIT == "ctrl+alt+esc"
     assert HOTKEY_RUN == "ctrl+alt+r"
     assert HOTKEY_STOP_CHAIN == "ctrl+alt+x"
-    assert len(SYSTEM_HOTKEYS) == 6
+    assert len(SYSTEM_HOTKEYS) == 3
 
 
 def test_system_hotkeys_contains_all():
