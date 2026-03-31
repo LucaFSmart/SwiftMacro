@@ -276,3 +276,31 @@ def test_profile_repeat_zero_loops_until_stopped():
     runner.stop()
     time.sleep(0.2)
     assert not runner.is_running()
+
+
+def test_progress_reported_per_step():
+    """set_chain_progress is called once per step with the correct index."""
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [
+        ActionStep(action="wait", params={"ms": 1}),
+        ActionStep(action="wait", params={"ms": 1}),
+        ActionStep(action="wait", params={"ms": 1}),
+    ]
+    profile = make_profile(steps)
+
+    calls = []
+    original = state.set_chain_progress
+
+    def spy(current, total):
+        calls.append((current, total))
+        original(current, total)
+
+    state.set_chain_progress = spy
+    runner.run_profile(profile)
+    time.sleep(0.3)
+
+    # Should have been called with (0,3), (1,3), (2,3), (3,3) in order
+    assert (0, 3) in calls
+    assert (2, 3) in calls
+    assert (3, 3) in calls

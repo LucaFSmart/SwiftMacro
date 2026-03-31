@@ -89,6 +89,7 @@ class ActionRunner:
         for i, step in enumerate(profile.steps):
             if self._stop_event.is_set():
                 return had_error
+            self._state.set_chain_progress(i, n)
             if not step.validate():
                 self._state.set_status_message(f"Step {i+1}/{n}: invalid params")
                 had_error = True
@@ -96,6 +97,8 @@ class ActionRunner:
             self._state.set_status_message(f"Step {i+1}/{n}: {step.action}")
             if not self._execute_step(step):
                 had_error = True
+        if not self._stop_event.is_set() and not had_error:
+            self._state.set_chain_progress(n, n)  # 100% — brief, reset by set_runner_busy(False)
         return had_error
 
     def _execute_step(self, step: ActionStep) -> bool:
