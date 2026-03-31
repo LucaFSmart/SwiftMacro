@@ -15,6 +15,7 @@ class AppState:
     chain_lock_active: bool
     chain_lock_pos: tuple[int, int] | None
     _lock: threading.Lock = field(repr=False)
+    chain_progress: tuple[int, int] = field(default=(0, 0))  # (current_step, total_steps)
 
     # --- status message ---
     def get_status_message(self) -> str:
@@ -55,6 +56,7 @@ class AppState:
     def set_runner_busy(self, busy: bool) -> None:
         with self._lock:
             self.runner_busy = busy
+            self.chain_progress = (0, 0)  # reset on both start and stop
 
     # --- chain lock ---
     def get_chain_lock(self) -> tuple[bool, tuple[int, int] | None]:
@@ -65,6 +67,15 @@ class AppState:
         with self._lock:
             self.chain_lock_active = active
             self.chain_lock_pos = pos
+
+    # --- chain progress ---
+    def set_chain_progress(self, current: int, total: int) -> None:
+        with self._lock:
+            self.chain_progress = (current, total)
+
+    def get_chain_progress(self) -> tuple[int, int]:
+        with self._lock:
+            return self.chain_progress
 
 
 def make_state() -> AppState:
@@ -77,5 +88,6 @@ def make_state() -> AppState:
         runner_busy=False,
         chain_lock_active=False,
         chain_lock_pos=None,
+        chain_progress=(0, 0),
         _lock=threading.Lock(),
     )

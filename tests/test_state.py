@@ -129,3 +129,28 @@ def test_stop_event_propagates():
     t.join(timeout=2.0)
 
     assert observed == [True]
+
+
+def test_chain_progress_initial():
+    s = make_state()
+    assert s.get_chain_progress() == (0, 0)
+
+
+def test_set_chain_progress():
+    s = make_state()
+    s.set_chain_progress(3, 8)
+    assert s.get_chain_progress() == (3, 8)
+
+
+def test_set_runner_busy_true_resets_progress():
+    s = make_state()
+    s.set_chain_progress(5, 8)
+    s.set_runner_busy(True)
+    assert s.get_chain_progress() == (0, 0)
+
+
+def test_set_runner_busy_false_resets_progress():
+    s = make_state()
+    s.set_chain_progress(8, 8)
+    s.set_runner_busy(False)
+    assert s.get_chain_progress() == (0, 0)
