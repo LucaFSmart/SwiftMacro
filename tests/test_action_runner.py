@@ -302,5 +302,6 @@ def test_progress_reported_per_step():
 
     # Should have been called with (0,3), (1,3), (2,3), (3,3) in order
     assert (0, 3) in calls
+    assert (1, 3) in calls
     assert (2, 3) in calls
     assert (3, 3) in calls
