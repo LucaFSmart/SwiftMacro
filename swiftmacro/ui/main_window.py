@@ -7,7 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 from swiftmacro.constants import APP_NAME, MAX_PROFILES, UI_POLL_MS
 from swiftmacro.hotkeys import _shutdown_ref
 from swiftmacro.state import AppState
-from swiftmacro.ui.theme import COLORS, HEADING_FONT, MONO_FONT, configure_theme, style_listbox
+from swiftmacro.ui.theme import COLORS, HEADING_FONT, MONO_FONT, configure_theme, make_chip, style_listbox
 
 
 class MainWindow:
@@ -85,24 +85,18 @@ class MainWindow:
 
         chip_row = tk.Frame(left, bg=COLORS["bg"])
         chip_row.pack(anchor="w", pady=(14, 0))
-        self._runner_chip = tk.Label(
+        self._runner_chip = make_chip(
             chip_row,
             text="Idle",
-            bg="#17324c",
-            fg="#b7dbff",
-            font=("Segoe UI", 9, "bold"),
-            padx=12,
-            pady=5,
+            bg=COLORS["chip_idle_bg"],
+            fg=COLORS["chip_idle_fg"],
         )
         self._runner_chip.pack(side="left")
-        self._tray_chip = tk.Label(
+        self._tray_chip = make_chip(
             chip_row,
             text="Tray Ready" if self._tray_available else "Tray Offline",
-            bg="#173228" if self._tray_available else "#35221a",
+            bg=COLORS["chip_online_bg"] if self._tray_available else COLORS["chip_offline_bg"],
             fg=COLORS["success"] if self._tray_available else COLORS["warning"],
-            font=("Segoe UI", 9, "bold"),
-            padx=12,
-            pady=5,
         )
         self._tray_chip.pack(side="left", padx=(10, 0))
         tk.Label(
@@ -222,7 +216,10 @@ class MainWindow:
         self._profile_listbox.grid(row=0, column=0, sticky="nsew")
         self._profile_listbox.bind("<<ListboxSelect>>", self._on_profile_select)
 
-        profile_scroll = ttk.Scrollbar(list_shell, orient="vertical", command=self._profile_listbox.yview)
+        profile_scroll = ttk.Scrollbar(
+            list_shell, orient="vertical", command=self._profile_listbox.yview,
+            style="App.Vertical.TScrollbar",
+        )
         profile_scroll.grid(row=0, column=1, sticky="ns")
         self._profile_listbox.configure(yscrollcommand=profile_scroll.set)
 
@@ -349,15 +346,15 @@ class MainWindow:
 
         self._error_frame = tk.Frame(
             sidebar,
-            bg="#31121a",
-            highlightbackground="#6d2436",
+            bg=COLORS["error_bg"],
+            highlightbackground=COLORS["error_border"],
             highlightthickness=1,
         )
         self._error_label = tk.Label(
             self._error_frame,
             text="",
-            bg="#31121a",
-            fg="#ffb2c1",
+            bg=COLORS["error_bg"],
+            fg=COLORS["error_text"],
             anchor="w",
             justify="left",
             wraplength=280,
@@ -651,8 +648,8 @@ class MainWindow:
 
         self._runner_chip.config(
             text="Running Chain" if runner_busy else "Idle",
-            bg="#1c5d53" if runner_busy else "#17324c",
-            fg=COLORS["success"] if runner_busy else "#b7dbff",
+            bg=COLORS["chip_running_bg"] if runner_busy else COLORS["chip_idle_bg"],
+            fg=COLORS["success"] if runner_busy else COLORS["chip_idle_fg"],
         )
         self._footer_label.config(
             text=(
