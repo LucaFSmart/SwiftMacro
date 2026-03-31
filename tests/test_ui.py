@@ -190,4 +190,6 @@ def test_make_chip_returns_label(tk_root):
     assert chip.cget("text") == "Test"
     assert chip.cget("padx") == 12
     assert chip.cget("pady") == 5
+    assert chip.cget("bg") == COLORS["chip_idle_bg"]
+    assert chip.cget("fg") == COLORS["chip_idle_fg"]
     chip.destroy()

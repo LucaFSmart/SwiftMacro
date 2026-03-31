@@ -242,7 +242,7 @@ def make_chip(parent, text: str, bg: str, fg: str) -> tk.Label:
         text=text,
         bg=bg,
         fg=fg,
-        font=("Segoe UI", 9, "bold"),
+        font=(FONT_FAMILY, 9, "bold"),
         padx=12,
         pady=5,
     )
