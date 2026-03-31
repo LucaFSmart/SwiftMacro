@@ -217,6 +217,30 @@ class MainWindow:
         list_shell.grid_columnconfigure(0, weight=1)
         list_shell.grid_rowconfigure(0, weight=1)
 
+        self._empty_state_frame = tk.Frame(
+            panel,
+            bg=COLORS["entry_bg"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        # Same grid slot as list_shell (row 3) — starts NOT gridded, _poll() controls visibility
+        inner = tk.Frame(self._empty_state_frame, bg=COLORS["entry_bg"])
+        inner.place(relx=0.5, rely=0.5, anchor="center")
+        tk.Label(
+            inner, text="⚡", bg=COLORS["entry_bg"], fg=COLORS["accent"],
+            font=("Segoe UI", 28),
+        ).pack()
+        ttk.Label(inner, text="No profiles yet", style="SectionTitle.TLabel").pack(pady=(6, 0))
+        ttk.Label(
+            inner,
+            text="Build a reusable action chain to get started",
+            style="Muted.TLabel",
+        ).pack(pady=(4, 12))
+        ttk.Button(
+            inner, text="＋ Add your first profile",
+            style="Primary.TButton", command=self._cmd_add,
+        ).pack()
+
         self._profile_listbox = tk.Listbox(
             list_shell,
             height=12,
@@ -680,5 +704,14 @@ class MainWindow:
             self._progress_bar.grid(row=2, column=0, sticky="ew")
         else:
             self._progress_bar.grid_remove()
+
+        # Using _load_profiles() rather than _profile_store.load() directly — safer: handles profile_store=None
+        profiles = self._load_profiles()
+        if profiles:
+            self._empty_state_frame.grid_remove()
+            self._list_shell.grid()
+        else:
+            self._list_shell.grid_remove()
+            self._empty_state_frame.grid(row=3, column=0, sticky="nsew")
 
         self._root.after(UI_POLL_MS, self._poll)
