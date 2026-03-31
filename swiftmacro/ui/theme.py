@@ -24,6 +24,16 @@ COLORS: dict[str, str] = {
     "badge": "#12243a",
     "entry_bg": "#0e1728",
     "selection": "#1f4468",
+    # Status chips
+    "chip_idle_bg":    "#17324c",
+    "chip_idle_fg":    "#b7dbff",
+    "chip_running_bg": "#1c5d53",
+    "chip_online_bg":  "#173228",
+    "chip_offline_bg": "#35221a",
+    # Error frame
+    "error_bg":     "#31121a",
+    "error_border": "#6d2436",
+    "error_text":   "#ffb2c1",
 }
 
 
@@ -185,6 +195,28 @@ def configure_theme(root: tk.Misc) -> ttk.Style:
         "TSeparator",
         background=COLORS["border"],
     )
+    style.configure(
+        "App.Vertical.TScrollbar",
+        troughcolor=COLORS["bg"],
+        background=COLORS["border"],
+        arrowcolor=COLORS["muted"],
+        bordercolor=COLORS["bg"],
+        lightcolor=COLORS["border"],
+        darkcolor=COLORS["border"],
+    )
+    style.map(
+        "App.Vertical.TScrollbar",
+        background=[("active", COLORS["surface_soft"])],
+    )
+    style.configure(
+        "Teal.Horizontal.TProgressbar",
+        troughcolor=COLORS["surface_alt"],
+        background=COLORS["accent"],
+        bordercolor=COLORS["bg"],
+        lightcolor=COLORS["accent"],
+        darkcolor=COLORS["accent"],
+        thickness=5,
+    )
     return style
 
 
@@ -200,4 +232,17 @@ def style_listbox(listbox: tk.Listbox) -> None:
         relief="flat",
         bd=0,
         activestyle="none",
+    )
+
+
+def make_chip(parent, text: str, bg: str, fg: str) -> tk.Label:
+    """Create a styled status chip (raw tk.Label with fixed colors)."""
+    return tk.Label(
+        parent,
+        text=text,
+        bg=bg,
+        fg=fg,
+        font=("Segoe UI", 9, "bold"),
+        padx=12,
+        pady=5,
     )

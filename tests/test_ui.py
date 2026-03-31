@@ -171,3 +171,23 @@ def test_step_builder_can_edit_when_profile_is_at_max_steps(tk_root):
     assert _widget_state(dialog._add_step_btn) == "normal"
 
     dialog.top.destroy()
+
+
+def test_theme_color_tokens_present():
+    from swiftmacro.ui.theme import COLORS
+    required = [
+        "chip_idle_bg", "chip_idle_fg", "chip_running_bg",
+        "chip_online_bg", "chip_offline_bg",
+        "error_bg", "error_border", "error_text",
+    ]
+    for key in required:
+        assert key in COLORS, f"Missing COLORS token: {key!r}"
+
+
+def test_make_chip_returns_label(tk_root):
+    from swiftmacro.ui.theme import COLORS, make_chip
+    chip = make_chip(tk_root, "Test", COLORS["chip_idle_bg"], COLORS["chip_idle_fg"])
+    assert chip.cget("text") == "Test"
+    assert chip.cget("padx") == 12
+    assert chip.cget("pady") == 5
+    chip.destroy()
