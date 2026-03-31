@@ -9,17 +9,17 @@ from swiftmacro.cursor import get_cursor_pos
 from swiftmacro.models import ActionStep, Profile, VALID_ACTIONS
 from swiftmacro.ui.theme import COLORS, MONO_FONT, configure_theme, style_listbox
 
-_PARAM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
+_PARAM_FIELDS: dict[str, list[tuple[str, ...]]] = {
     "move": [("x", "X", "0"), ("y", "Y", "0")],
-    "click": [("button", "Button", "left"), ("x", "X", "0"), ("y", "Y", "0")],
+    "click": [("button", "Button", "left", "combo"), ("x", "X", "0"), ("y", "Y", "0")],
     "repeat_click": [
-        ("button", "Button", "left"),
+        ("button", "Button", "left", "combo"),
         ("x", "X", "0"),
         ("y", "Y", "0"),
         ("count", "Count", "5"),
         ("interval_ms", "Interval (ms)", "100"),
     ],
-    "keypress": [("key", "Key", "enter")],
+    "keypress": [("key", "Key", "enter", "key_combo")],
     "wait": [("ms", "Duration (ms)", "100")],
     "lock": [
         ("x", "X", "0"),
@@ -29,11 +29,11 @@ _PARAM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
     "scroll": [
         ("x", "X", "0"),
         ("y", "Y", "0"),
-        ("direction", "Direction", "down"),
+        ("direction", "Direction", "down", "combo"),
         ("amount", "Amount (notches)", "3"),
     ],
     "hold_key": [
-        ("key", "Key", "w"),
+        ("key", "Key", "w", "key_combo"),
         ("duration_ms", "Duration (ms, 0 = until stopped)", "500"),
     ],
     "random_delay": [
@@ -44,6 +44,24 @@ _PARAM_FIELDS: dict[str, list[tuple[str, str, str]]] = {
 
 _NEEDS_POSITION = {"move", "click", "repeat_click", "lock", "scroll"}
 _INT_PARAMS = {"x", "y", "count", "interval_ms", "ms", "duration_ms", "amount", "min_ms", "max_ms"}
+
+_COMBO_VALUES: dict[str, list[str]] = {
+    "button":    ["left", "right", "middle"],
+    "direction": ["up", "down", "left", "right"],
+}
+
+COMMON_KEYS: list[str] = [
+    "enter", "space", "tab", "backspace", "delete", "escape",
+    "shift", "ctrl", "alt", "win",
+    "up", "down", "left", "right",
+    "home", "end", "page up", "page down",
+    "f1", "f2", "f3", "f4", "f5", "f6",
+    "f7", "f8", "f9", "f10", "f11", "f12",
+    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+]
+
 _ACTION_HINTS = {
     "move": "Move the cursor to an exact screen coordinate without clicking.",
     "click": "Trigger a single mouse click at a fixed position.",
@@ -312,14 +330,34 @@ class StepBuilderDialog:
         self._param_entries.clear()
         self._param_vars.clear()
 
-        for row, (name, label, default) in enumerate(_PARAM_FIELDS.get(action, [])):
+        for row, field in enumerate(_PARAM_FIELDS.get(action, [])):
+            name, label, default = field[0], field[1], field[2]
+            widget_type = field[3] if len(field) > 3 else "entry"
+
             ttk.Label(self._param_frame, text=label, style="Panel.TLabel").grid(
                 row=row, column=0, sticky="w", pady=(0, 6)
             )
             var = tk.StringVar(value=default)
-            entry = ttk.Entry(self._param_frame, textvariable=var)
-            entry.grid(row=row, column=1, sticky="ew", padx=(10, 0), pady=(0, 6))
-            self._param_entries[name] = entry
+
+            if widget_type == "combo":
+                widget = ttk.Combobox(
+                    self._param_frame,
+                    textvariable=var,
+                    values=_COMBO_VALUES[name],
+                    state="readonly",
+                )
+            elif widget_type == "key_combo":
+                widget = ttk.Combobox(
+                    self._param_frame,
+                    textvariable=var,
+                    values=COMMON_KEYS,
+                    state="normal",
+                )
+            else:
+                widget = ttk.Entry(self._param_frame, textvariable=var)
+
+            widget.grid(row=row, column=1, sticky="ew", padx=(10, 0), pady=(0, 6))
+            self._param_entries[name] = widget
             self._param_vars[name] = var
 
         self._param_frame.columnconfigure(1, weight=1)

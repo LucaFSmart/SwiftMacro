@@ -250,3 +250,43 @@ def test_listbox_shown_when_profiles_exist(tk_root):
     assert ui._empty_state_frame.grid_info() == {}
     for child in tk_root.winfo_children():
         child.destroy()
+
+
+def test_combo_constants_defined():
+    """_COMBO_VALUES and COMMON_KEYS exist with the expected entries."""
+    from swiftmacro.ui.step_builder import _COMBO_VALUES, COMMON_KEYS
+    assert "button" in _COMBO_VALUES
+    assert "left" in _COMBO_VALUES["button"]
+    assert "direction" in _COMBO_VALUES
+    assert "down" in _COMBO_VALUES["direction"]
+    assert "enter" in COMMON_KEYS
+    assert "w" in COMMON_KEYS
+
+
+def test_param_fields_widget_types(tk_root):
+    """click/button → Combobox readonly; scroll/direction → Combobox readonly; keypress/key → Combobox normal."""
+    from tkinter import ttk
+    from swiftmacro.ui.step_builder import StepBuilderDialog
+
+    store = _Store([])
+    dialog = StepBuilderDialog(tk_root, store)
+    dialog._build_param_fields("click")
+    tk_root.update_idletasks()
+
+    button_widget = dialog._param_entries.get("button")
+    assert isinstance(button_widget, ttk.Combobox)
+    assert str(button_widget.cget("state")) == "readonly"
+
+    dialog._build_param_fields("keypress")
+    tk_root.update_idletasks()
+    key_widget = dialog._param_entries.get("key")
+    assert isinstance(key_widget, ttk.Combobox)
+    assert str(key_widget.cget("state")) == "normal"
+
+    dialog._build_param_fields("scroll")
+    tk_root.update_idletasks()
+    dir_widget = dialog._param_entries.get("direction")
+    assert isinstance(dir_widget, ttk.Combobox)
+    assert str(dir_widget.cget("state")) == "readonly"
+
+    dialog.top.destroy()
