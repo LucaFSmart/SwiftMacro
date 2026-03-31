@@ -173,7 +173,7 @@ class MainWindow:
         panel = ttk.Frame(parent, style="Card.TFrame", padding=(18, 18, 18, 18))
         panel.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
         panel.columnconfigure(0, weight=1)
-        panel.rowconfigure(2, weight=1)
+        panel.rowconfigure(3, weight=1)
 
         header = ttk.Frame(panel, style="Card.TFrame")
         header.grid(row=0, column=0, sticky="ew")
@@ -201,8 +201,19 @@ class MainWindow:
         )
         self._status_label.grid(row=1, column=0, sticky="ew", pady=(12, 12))
 
+        self._progress_bar = ttk.Progressbar(
+            panel,
+            orient="horizontal",
+            mode="determinate",
+            style="Teal.Horizontal.TProgressbar",
+            maximum=100,
+            value=0,
+        )
+        # Do NOT grid here — _poll() shows/hides it
+
         list_shell = tk.Frame(panel, bg=COLORS["entry_bg"], highlightbackground=COLORS["border"], highlightthickness=1)
-        list_shell.grid(row=2, column=0, sticky="nsew")
+        self._list_shell = list_shell
+        list_shell.grid(row=3, column=0, sticky="nsew")
         list_shell.grid_columnconfigure(0, weight=1)
         list_shell.grid_rowconfigure(0, weight=1)
 
@@ -224,7 +235,7 @@ class MainWindow:
         self._profile_listbox.configure(yscrollcommand=profile_scroll.set)
 
         profile_btn_frame = ttk.Frame(panel, style="Card.TFrame")
-        profile_btn_frame.grid(row=3, column=0, sticky="ew", pady=(14, 0))
+        profile_btn_frame.grid(row=4, column=0, sticky="ew", pady=(14, 0))
         for column in range(6):
             profile_btn_frame.columnconfigure(column, weight=1)
 
@@ -661,5 +672,13 @@ class MainWindow:
         )
         self._update_profile_details()
         self._update_action_buttons()
+
+        current, total = self._state.get_chain_progress()
+        if self._state.get_runner_busy() and total > 0:
+            pct = int(current / total * 100)
+            self._progress_bar.config(value=pct)
+            self._progress_bar.grid(row=2, column=0, sticky="ew")
+        else:
+            self._progress_bar.grid_remove()
 
         self._root.after(UI_POLL_MS, self._poll)

@@ -193,3 +193,34 @@ def test_make_chip_returns_label(tk_root):
     assert chip.cget("bg") == COLORS["chip_idle_bg"]
     assert chip.cget("fg") == COLORS["chip_idle_fg"]
     chip.destroy()
+
+
+def test_progress_bar_hidden_when_idle(tk_root):
+    """Progress bar should not be in the grid when runner is idle."""
+    state = make_state()
+    store = _Store([_make_profile()])
+    ui = MainWindow(tk_root, state, tray_available=False, profile_store=store)
+    tk_root.update_idletasks()
+    # grid_info() returns {} if widget is not currently gridded
+    assert ui._progress_bar.grid_info() == {}
+    for child in tk_root.winfo_children():
+        child.destroy()
+
+
+def test_progress_bar_shown_when_busy(tk_root):
+    """Progress bar appears when runner is busy and total > 0."""
+    state = make_state()
+    store = _Store([_make_profile()])
+    ui = MainWindow(tk_root, state, tray_available=False, profile_store=store)
+    tk_root.update_idletasks()
+
+    state.set_runner_busy(True)
+    state.set_chain_progress(2, 8)  # set after busy=True to bypass reset
+    tk_root.update_idletasks()
+    ui._poll()  # trigger one poll cycle
+    tk_root.update_idletasks()
+
+    assert ui._progress_bar.grid_info() != {}
+    assert ui._progress_bar.cget("value") == 25  # int(2/8*100)
+    for child in tk_root.winfo_children():
+        child.destroy()
