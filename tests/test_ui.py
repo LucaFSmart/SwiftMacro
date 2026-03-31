@@ -224,3 +224,29 @@ def test_progress_bar_shown_when_busy(tk_root):
     assert ui._progress_bar.cget("value") == 25  # int(2/8*100)
     for child in tk_root.winfo_children():
         child.destroy()
+
+
+def test_empty_state_shown_when_no_profiles(tk_root):
+    """Empty-state frame is visible when profile store has 0 profiles."""
+    state = make_state()
+    ui = MainWindow(tk_root, state, tray_available=False, profile_store=_Store([]))
+    tk_root.update_idletasks()
+    ui._poll()
+    tk_root.update_idletasks()
+    assert ui._empty_state_frame.grid_info() != {}
+    assert ui._list_shell.grid_info() == {}
+    for child in tk_root.winfo_children():
+        child.destroy()
+
+
+def test_listbox_shown_when_profiles_exist(tk_root):
+    """List shell is visible and empty-state is hidden when profiles exist."""
+    state = make_state()
+    ui = MainWindow(tk_root, state, tray_available=False, profile_store=_Store([_make_profile()]))
+    tk_root.update_idletasks()
+    ui._poll()
+    tk_root.update_idletasks()
+    assert ui._list_shell.grid_info() != {}
+    assert ui._empty_state_frame.grid_info() == {}
+    for child in tk_root.winfo_children():
+        child.destroy()
