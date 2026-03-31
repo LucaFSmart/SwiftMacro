@@ -198,7 +198,10 @@ class StepBuilderDialog:
         self._steps_listbox.grid(row=0, column=0, sticky="nsew")
         self._steps_listbox.bind("<<ListboxSelect>>", self._on_step_select)
 
-        step_scroll = ttk.Scrollbar(list_shell, orient="vertical", command=self._steps_listbox.yview)
+        step_scroll = ttk.Scrollbar(
+            list_shell, orient="vertical", command=self._steps_listbox.yview,
+            style="App.Vertical.TScrollbar",
+        )
         step_scroll.grid(row=0, column=1, sticky="ns")
         self._steps_listbox.configure(yscrollcommand=step_scroll.set)
 
