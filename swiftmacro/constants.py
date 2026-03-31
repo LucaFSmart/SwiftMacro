@@ -18,7 +18,7 @@ ICON_SIZE = 64
 
 # Limits
 MAX_PROFILES = 20
-MAX_STEPS = 50
+MAX_STEPS = 100
 
 # File paths (expanded at runtime via os.path.expanduser)
 PROFILES_DIR = "~/.swiftmacro"

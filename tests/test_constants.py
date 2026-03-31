@@ -9,7 +9,7 @@ def test_constants_importable():
     )
     assert LOCK_INTERVAL_MS == 15
     assert MAX_PROFILES == 20
-    assert MAX_STEPS == 50
+    assert MAX_STEPS == 100
     assert HOTKEY_EXIT == "ctrl+alt+esc"
     assert HOTKEY_RUN == "ctrl+alt+r"
     assert HOTKEY_STOP_CHAIN == "ctrl+alt+x"
