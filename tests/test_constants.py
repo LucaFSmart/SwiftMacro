@@ -1,3 +1,6 @@
+import re
+
+
 def test_constants_importable():
     from swiftmacro.constants import (
         HOTKEY_EXIT,
@@ -21,8 +24,6 @@ def test_system_hotkeys_contains_all():
     assert HOTKEY_RUN in SYSTEM_HOTKEYS
     assert HOTKEY_STOP_CHAIN in SYSTEM_HOTKEYS
 
-
-import re
 
 def test_app_version_defined():
     from swiftmacro.constants import APP_VERSION
