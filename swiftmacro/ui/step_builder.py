@@ -194,7 +194,7 @@ class StepBuilderDialog:
         ttk.Label(steps_header, text="Chain Steps", style="SectionTitle.TLabel").grid(
             row=0, column=0, sticky="w"
         )
-        self._step_count_label = ttk.Label(steps_header, text="0/50 steps", style="Badge.TLabel")
+        self._step_count_label = ttk.Label(steps_header, text=f"0/{MAX_STEPS} steps", style="Badge.TLabel")
         self._step_count_label.grid(row=0, column=1, sticky="e")
         list_shell = tk.Frame(
             steps_panel,
