@@ -273,8 +273,6 @@ def test_update_chip_color_tokens_present():
 
 def test_update_chip_hidden_when_no_update(tk_root):
     """Update chip must not be visible when update_available is False."""
-    import pytest
-    import tkinter as tk
     from swiftmacro.state import make_state
     from swiftmacro.ui.main_window import MainWindow
 

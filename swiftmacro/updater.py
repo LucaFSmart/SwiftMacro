@@ -28,5 +28,7 @@ def check_for_update(repo: str, current_version: str) -> tuple[bool, str]:
         if Version(tag) > Version(current_version):
             return True, html_url
         return False, ""
-    except Exception:
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).debug("Update check failed: %s", exc)
         return False, ""

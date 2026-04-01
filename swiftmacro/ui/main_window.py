@@ -110,6 +110,7 @@ class MainWindow:
             "<Button-1>",
             lambda _: webbrowser.open(self._state.get_update_available()[1]),
         )
+        self._update_chip.config(cursor="hand2")
         # Note: _update_chip is intentionally NOT packed here — _poll() controls visibility
         tk.Label(
             left,
