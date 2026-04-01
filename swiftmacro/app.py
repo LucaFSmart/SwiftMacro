@@ -1,6 +1,8 @@
 """Application startup and shutdown wiring."""
 from __future__ import annotations
 
+import threading
+
 from swiftmacro.action_runner import ActionRunner
 from swiftmacro.constants import APP_ID, APP_MUTEX_NAME
 from swiftmacro.dpi import init_dpi_awareness
@@ -50,6 +52,15 @@ def make_shutdown(
             destroy_root()
 
     return shutdown
+
+
+def _check_update_bg(state: AppState) -> None:
+    """Background thread: check GitHub for a newer release and update AppState."""
+    from swiftmacro import updater
+    from swiftmacro.constants import APP_VERSION, GITHUB_REPO
+    available, url = updater.check_for_update(GITHUB_REPO, APP_VERSION)
+    if available:
+        state.set_update_available(url)
 
 
 def main() -> None:
@@ -104,6 +115,8 @@ def main() -> None:
         hotkey_mgr=hotkey_mgr,
         action_runner=action_runner,
     )
+
+    threading.Thread(target=_check_update_bg, args=(state,), daemon=True).start()
 
     lock_loop = LockLoop(state)
     lock_loop.start()
