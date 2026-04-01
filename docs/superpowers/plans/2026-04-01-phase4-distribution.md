@@ -422,46 +422,42 @@ def test_update_chip_color_tokens_present():
     assert COLORS["chip_update_fg"]  # non-empty
 
 
-def test_update_chip_hidden_when_no_update(monkeypatch):
+def test_update_chip_hidden_when_no_update(tk_root):
     """Update chip must not be visible when update_available is False."""
+    import pytest
     import tkinter as tk
     from swiftmacro.state import make_state
     from swiftmacro.ui.main_window import MainWindow
 
-    root = tk.Tk()
-    root.withdraw()
-    try:
-        state = make_state()
-        # update_available starts False
-        win = MainWindow(root, state, tray_available=False)
-        root.update_idletasks()
-        # chip should not be pack-managed (pack_info raises TclError when not packed)
-        import pytest
-        with pytest.raises(tk.TclError):
-            win._update_chip.pack_info()
-    finally:
-        root.destroy()
+    # Tear down any children left by previous tests
+    for child in tk_root.winfo_children():
+        child.destroy()
+
+    state = make_state()
+    # update_available starts False
+    win = MainWindow(tk_root, state, tray_available=False)
+    tk_root.update_idletasks()
+    # chip should not be pack-managed (pack_info raises TclError when not packed)
+    with pytest.raises(tk.TclError):
+        win._update_chip.pack_info()
 
 
-def test_update_chip_shown_when_update_available(monkeypatch):
+def test_update_chip_shown_when_update_available(tk_root):
     """Update chip must become visible after set_update_available is called."""
-    import tkinter as tk
     from swiftmacro.state import make_state
     from swiftmacro.ui.main_window import MainWindow
 
-    root = tk.Tk()
-    root.withdraw()
-    try:
-        state = make_state()
-        win = MainWindow(root, state, tray_available=False)
-        state.set_update_available("https://github.com/releases/v1.1.0")
-        # trigger _poll manually
-        win._poll()
-        root.update_idletasks()
-        info = win._update_chip.pack_info()
-        assert info  # truthy dict means chip is pack-managed (visible)
-    finally:
-        root.destroy()
+    for child in tk_root.winfo_children():
+        child.destroy()
+
+    state = make_state()
+    win = MainWindow(tk_root, state, tray_available=False)
+    state.set_update_available("https://github.com/releases/v1.1.0")
+    # trigger _poll manually
+    win._poll()
+    tk_root.update_idletasks()
+    info = win._update_chip.pack_info()
+    assert info  # truthy dict means chip is pack-managed (visible)
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -484,11 +480,11 @@ In the `COLORS` dict, add after `"chip_offline_bg"`:
 
 - [ ] **Step 4: Add update chip to `swiftmacro/ui/main_window.py`**
 
-**4a — Add imports** at the top of `main_window.py` (two new stdlib imports):
+**4a — Add `import webbrowser`** to the module-level imports of `main_window.py`. The existing file already has `import tkinter as tk` and `from tkinter import filedialog, messagebox, ttk` — insert only the new line between them:
 
 ```python
 import tkinter as tk
-import webbrowser
+import webbrowser                          # ← add this line only
 from tkinter import filedialog, messagebox, ttk
 ```
 
@@ -664,7 +660,7 @@ print(target)
 '@ | py -
 
 # Read version from constants and generate Windows VERSIONINFO file
-$version = python -c "from swiftmacro.constants import APP_VERSION; print(APP_VERSION)"
+$version = py -c "from swiftmacro.constants import APP_VERSION; print(APP_VERSION)"
 Write-Host "Building SwiftMacro v$version"
 
 $parts = $version -split '\.'
@@ -748,10 +744,14 @@ Create `inno/SwiftMacro.iss`:
 
 ```iss
 ; SwiftMacro Inno Setup Script
-; AppVersion is passed from build_installer.ps1 via /DAppVersion=x.y.z
+; AppVersion and GitHubRepo are passed from build_installer.ps1 via /DAppVersion=x.y.z /DGitHubRepo=...
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
+#endif
+
+#ifndef GitHubRepo
+  #define GitHubRepo "owner/SwiftMacro"
 #endif
 
 [Setup]
@@ -812,8 +812,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
 # Read version from constants
-$version = python -c "from swiftmacro.constants import APP_VERSION; print(APP_VERSION)"
-$githubRepo = python -c "from swiftmacro.constants import GITHUB_REPO; print(GITHUB_REPO)"
+$version = py -c "from swiftmacro.constants import APP_VERSION; print(APP_VERSION)"
+$githubRepo = py -c "from swiftmacro.constants import GITHUB_REPO; print(GITHUB_REPO)"
 Write-Host "Building installer for SwiftMacro v$version"
 
 # Assert EXE exists
@@ -883,8 +883,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
 # Read version and repo from constants
-$version = python -c "from swiftmacro.constants import APP_VERSION; print(APP_VERSION)"
-$githubRepo = python -c "from swiftmacro.constants import GITHUB_REPO; print(GITHUB_REPO)"
+$version = py -c "from swiftmacro.constants import APP_VERSION; print(APP_VERSION)"
+$githubRepo = py -c "from swiftmacro.constants import GITHUB_REPO; print(GITHUB_REPO)"
 
 # Guard against unfilled placeholder
 if ($githubRepo -match "owner") {
@@ -925,7 +925,7 @@ Write-Host $changelog
 # Create GitHub Release
 gh release create "v$version" `
     --title "SwiftMacro v$version" `
-    --notes $changelog `
+    --notes "$changelog" `
     $exePath `
     $installerPath
 
@@ -967,7 +967,7 @@ Expected: all tests pass, zero failures
 - [ ] **Verify no bare hex strings were introduced**
 
 ```
-python -c "
+py -c "
 import re, sys
 files = ['swiftmacro/ui/main_window.py', 'swiftmacro/ui/step_builder.py']
 for f in files:
