@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-import webbrowser                          # ← add this line only
+import webbrowser
 from tkinter import filedialog, messagebox, ttk
 
 from swiftmacro.constants import APP_NAME, MAX_PROFILES, UI_POLL_MS
