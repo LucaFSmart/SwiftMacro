@@ -263,6 +263,52 @@ def test_combo_constants_defined():
     assert "w" in COMMON_KEYS
 
 
+def test_update_chip_color_tokens_present():
+    from swiftmacro.ui.theme import COLORS
+    assert "chip_update_bg" in COLORS
+    assert "chip_update_fg" in COLORS
+    assert COLORS["chip_update_bg"]  # non-empty
+    assert COLORS["chip_update_fg"]  # non-empty
+
+
+def test_update_chip_hidden_when_no_update(tk_root):
+    """Update chip must not be visible when update_available is False."""
+    import pytest
+    import tkinter as tk
+    from swiftmacro.state import make_state
+    from swiftmacro.ui.main_window import MainWindow
+
+    # Tear down any children left by previous tests
+    for child in tk_root.winfo_children():
+        child.destroy()
+
+    state = make_state()
+    # update_available starts False
+    win = MainWindow(tk_root, state, tray_available=False)
+    tk_root.update_idletasks()
+    # chip should not be pack-managed (pack_info raises TclError when not packed)
+    with pytest.raises(tk.TclError):
+        win._update_chip.pack_info()
+
+
+def test_update_chip_shown_when_update_available(tk_root):
+    """Update chip must become visible after set_update_available is called."""
+    from swiftmacro.state import make_state
+    from swiftmacro.ui.main_window import MainWindow
+
+    for child in tk_root.winfo_children():
+        child.destroy()
+
+    state = make_state()
+    win = MainWindow(tk_root, state, tray_available=False)
+    state.set_update_available("https://github.com/releases/v1.1.0")
+    # trigger _poll manually
+    win._poll()
+    tk_root.update_idletasks()
+    info = win._update_chip.pack_info()
+    assert info  # truthy dict means chip is pack-managed (visible)
+
+
 def test_param_fields_widget_types(tk_root):
     """click/button → Combobox readonly; scroll/direction → Combobox readonly; keypress/key → Combobox normal."""
     from tkinter import ttk
