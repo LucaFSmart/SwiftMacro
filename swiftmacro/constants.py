@@ -32,3 +32,7 @@ PROFILES_FILE_LEGACY = "~/.mouse_lock/profiles.json"
 SYSTEM_HOTKEYS = frozenset({
     HOTKEY_EXIT, HOTKEY_RUN, HOTKEY_STOP_CHAIN,
 })
+
+# Version and update
+APP_VERSION = "1.0.0"
+GITHUB_REPO = "swiftmacro-app/SwiftMacro"
