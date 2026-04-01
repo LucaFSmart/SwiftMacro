@@ -20,3 +20,20 @@ def test_system_hotkeys_contains_all():
     from swiftmacro.constants import SYSTEM_HOTKEYS, HOTKEY_RUN, HOTKEY_STOP_CHAIN
     assert HOTKEY_RUN in SYSTEM_HOTKEYS
     assert HOTKEY_STOP_CHAIN in SYSTEM_HOTKEYS
+
+
+import re
+
+def test_app_version_defined():
+    from swiftmacro.constants import APP_VERSION
+    assert APP_VERSION
+    assert re.match(r"^\d+\.\d+\.\d+$", APP_VERSION), f"APP_VERSION must be semver, got: {APP_VERSION!r}"
+
+
+def test_github_repo_defined():
+    from swiftmacro.constants import GITHUB_REPO
+    assert GITHUB_REPO
+    assert "/" in GITHUB_REPO
+    assert "owner" not in GITHUB_REPO, (
+        "Replace the 'owner' placeholder in GITHUB_REPO with your actual GitHub username"
+    )
