@@ -42,7 +42,7 @@ swiftmacro/
   ui/
     main_window.py    # Primary Tkinter window (980×720, profile-centric layout)
     step_builder.py   # StepBuilderDialog – modal profile/step editor
-    theme.py          # Dark theme colors, fonts, ttk styles
+    theme.py          # Dark theme: COLORS dict, fonts, ttk styles, make_chip(), style_listbox()
 ```
 
 **Entry point:** `app.main()` ← called by `swiftmacro.py` and `swiftmacro.pyw`
@@ -52,7 +52,7 @@ swiftmacro/
 | Constant | Value | Notes |
 |---|---|---|
 | `MAX_PROFILES` | 20 | Hard cap on stored profiles |
-| `MAX_STEPS` | 50 | Hard cap per profile |
+| `MAX_STEPS` | 100 | Hard cap per profile |
 | `PROFILES_FILE` | `~/.swiftmacro/profiles.json` | Persisted across runs |
 | `HOTKEY_RUN` | `ctrl+alt+r` | Run active profile |
 | `HOTKEY_STOP_CHAIN` | `ctrl+alt+x` | Stop running chain |
@@ -74,6 +74,21 @@ Valid actions: `move`, `click`, `repeat_click`, `keypress`, `wait`, `lock`, `scr
 - **Hotkey refresh:** After every profile add/edit/delete/import, call `hotkey_mgr.refresh_profile_hotkeys(profile_store.load())`.
 - **Import conflict resolution:** On import, conflicting hotkeys in incoming profiles are cleared (not rejected).
 - **DPI:** `init_dpi_awareness()` must be called before any window or coordinate operation.
+
+## UI Patterns (Phase 3)
+
+- **COLORS tokens:** All colors come from `theme.COLORS`. Never use bare hex strings in `main_window.py` or `step_builder.py`.
+- **`make_chip(parent, text, bg, fg)`:** Factory for status chips (`tk.Label` with `FONT_FAMILY`, `padx=12, pady=5`). Import from `swiftmacro.ui.theme`.
+- **`AppState.chain_progress`:** `tuple[int, int]` — `(current_step, total_steps)`. Reset to `(0, 0)` by `set_runner_busy()` on both `True` and `False`. Updated per step by `action_runner`.
+- **Profiles panel row layout:**
+  | Row | Widget |
+  |-----|--------|
+  | 0 | section title |
+  | 1 | status label |
+  | 2 | progress bar (hidden when idle) |
+  | 3 | listbox shell **or** empty-state frame (mutually exclusive) |
+  | 4 | profile button row |
+- **`_PARAM_FIELDS` 4-tuple:** `(name, label, default, widget_type)` — `"combo"` → readonly `ttk.Combobox`; `"key_combo"` → editable `ttk.Combobox`; omitted/`"entry"` → `ttk.Entry`.
 
 ## Requirements
 

@@ -36,6 +36,10 @@ COLORS: dict[str, str] = {
     "error_bg":     "#31121a",
     "error_border": "#6d2436",
     "error_text":   "#ffb2c1",
+    # Button foreground / active variants (dark contrasting colors for colored buttons)
+    "accent_text":  "#081018",   # dark text on teal accent button
+    "danger_text":  "#22060d",   # dark text on red danger button
+    "danger_active": "#f05f78",  # lighter red for danger button hover
 }
 
 
@@ -141,7 +145,7 @@ def configure_theme(root: tk.Misc) -> ttk.Style:
     style.configure(
         "Primary.TButton",
         background=COLORS["accent"],
-        foreground="#081018",
+        foreground=COLORS["accent_text"],
     )
     style.map(
         "Primary.TButton",
@@ -160,11 +164,11 @@ def configure_theme(root: tk.Misc) -> ttk.Style:
     style.configure(
         "Danger.TButton",
         background=COLORS["danger"],
-        foreground="#22060d",
+        foreground=COLORS["danger_text"],
     )
     style.map(
         "Danger.TButton",
-        background=[("active", "#f05f78"), ("disabled", COLORS["surface_soft"])],
+        background=[("active", COLORS["danger_active"]), ("disabled", COLORS["surface_soft"])],
         foreground=[("disabled", COLORS["muted"])],
     )
     style.configure(
