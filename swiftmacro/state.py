@@ -16,6 +16,8 @@ class AppState:
     chain_lock_pos: tuple[int, int] | None
     _lock: threading.Lock = field(repr=False)
     chain_progress: tuple[int, int] = field(default=(0, 0))  # (current_step, total_steps)
+    update_available: bool = field(default=False)
+    update_url: str = field(default="")
 
     # --- status message ---
     def get_status_message(self) -> str:
@@ -77,6 +79,16 @@ class AppState:
         with self._lock:
             return self.chain_progress
 
+    # --- update availability ---
+    def set_update_available(self, url: str) -> None:
+        with self._lock:
+            self.update_available = True
+            self.update_url = url
+
+    def get_update_available(self) -> tuple[bool, str]:
+        with self._lock:
+            return self.update_available, self.update_url
+
 
 def make_state() -> AppState:
     """Factory creates a fresh AppState with sensible defaults."""
@@ -89,5 +101,7 @@ def make_state() -> AppState:
         chain_lock_active=False,
         chain_lock_pos=None,
         chain_progress=(0, 0),
+        update_available=False,
+        update_url="",
         _lock=threading.Lock(),
     )
