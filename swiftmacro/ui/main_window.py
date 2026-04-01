@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+import webbrowser                          # ← add this line only
 from tkinter import filedialog, messagebox, ttk
 
 from swiftmacro.constants import APP_NAME, MAX_PROFILES, UI_POLL_MS
@@ -99,6 +100,17 @@ class MainWindow:
             fg=COLORS["success"] if self._tray_available else COLORS["warning"],
         )
         self._tray_chip.pack(side="left", padx=(10, 0))
+        self._update_chip = make_chip(
+            chip_row,
+            text="↑ Update available",
+            bg=COLORS["chip_update_bg"],
+            fg=COLORS["chip_update_fg"],
+        )
+        self._update_chip.bind(
+            "<Button-1>",
+            lambda _: webbrowser.open(self._state.get_update_available()[1]),
+        )
+        # Note: _update_chip is intentionally NOT packed here — _poll() controls visibility
         tk.Label(
             left,
             text="Create a profile, preview its steps on the right, then run it directly or via hotkey.",
@@ -686,6 +698,11 @@ class MainWindow:
             bg=COLORS["chip_running_bg"] if runner_busy else COLORS["chip_idle_bg"],
             fg=COLORS["success"] if runner_busy else COLORS["chip_idle_fg"],
         )
+        available, _ = self._state.get_update_available()
+        if available:
+            self._update_chip.pack(side="left", padx=(10, 0))
+        else:
+            self._update_chip.pack_forget()
         self._footer_label.config(
             text=(
                 "Close hides the window to the tray when available. Use the tray icon or "

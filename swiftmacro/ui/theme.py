@@ -30,6 +30,8 @@ COLORS: dict[str, str] = {
     "chip_running_bg": "#1c5d53",
     "chip_online_bg":  "#173228",
     "chip_offline_bg": "#35221a",
+    "chip_update_bg":  "#3d2600",   # dark amber — update available
+    "chip_update_fg":  "#f6c177",   # warm foreground (same as "warning")
     # Error frame
     "error_bg":     "#31121a",
     "error_border": "#6d2436",
