@@ -86,6 +86,7 @@ def test_tag_without_v_prefix():
     with patch("urllib.request.urlopen", return_value=_make_urlopen_mock("1.1.0")):
         available, url = check_for_update("owner/repo", "1.0.0")
     assert available is True
+    assert url == "https://github.com/releases/v1.1.0"
 
 
 def test_no_update_two_digit_minor():
