@@ -843,7 +843,7 @@ if (-not $iscc) {
 
 # Build installer
 $issPath = Join-Path $repoRoot "inno\SwiftMacro.iss"
-& $iscc /DAppVersion=$version /DGitHubRepo=$githubRepo $issPath
+& $iscc /DAppVersion=$version /DGitHubRepo=$githubRepo "$issPath"
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "ISCC.exe failed with exit code $LASTEXITCODE"
