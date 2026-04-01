@@ -154,3 +154,17 @@ def test_set_runner_busy_false_resets_progress():
     s.set_chain_progress(8, 8)
     s.set_runner_busy(False)
     assert s.get_chain_progress() == (0, 0)
+
+
+def test_update_available_initial():
+    s = make_state()
+    assert s.update_available is False
+    assert s.update_url == ""
+
+
+def test_set_update_available():
+    s = make_state()
+    s.set_update_available("https://github.com/releases/v1.1.0")
+    available, url = s.get_update_available()
+    assert available is True
+    assert url == "https://github.com/releases/v1.1.0"
