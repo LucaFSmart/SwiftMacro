@@ -342,3 +342,34 @@ def test_treeview_style_configured(tk_root):
     style = configure_theme(tk_root)
     # If the style is not registered, layout() returns an empty list
     assert style.layout("App.Treeview") != []
+
+
+def test_profile_tree_has_correct_columns(tk_root):
+    """Profile panel must use a Treeview with name/hotkey/steps columns."""
+    from tkinter import ttk
+    from swiftmacro.state import make_state
+    from swiftmacro.ui.main_window import MainWindow
+
+    for child in tk_root.winfo_children():
+        child.destroy()
+    win = MainWindow(tk_root, make_state(), tray_available=False)
+    tk_root.update_idletasks()
+    assert hasattr(win, "_profile_tree")
+    assert isinstance(win._profile_tree, ttk.Treeview)
+    assert "hotkey" in win._profile_tree["columns"]
+    assert "steps" in win._profile_tree["columns"]
+
+
+def test_profile_tree_populated_from_store(tk_root):
+    """Treeview rows must match the profiles in the store."""
+    from swiftmacro.state import make_state
+    from swiftmacro.ui.main_window import MainWindow
+
+    for child in tk_root.winfo_children():
+        child.destroy()
+    p = _make_profile()
+    win = MainWindow(tk_root, make_state(), tray_available=False, profile_store=_Store([p]))
+    tk_root.update_idletasks()
+    items = win._profile_tree.get_children()
+    assert len(items) == 1
+    assert items[0] == p.id  # iid == profile.id
