@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 from swiftmacro.constants import APP_NAME, MAX_PROFILES, UI_POLL_MS
 from swiftmacro.hotkeys import _shutdown_ref
 from swiftmacro.state import AppState
-from swiftmacro.ui.theme import COLORS, HEADING_FONT, MONO_FONT, configure_theme, make_chip, style_listbox
+from swiftmacro.ui.theme import COLORS, HEADING_FONT, configure_theme, make_chip
 
 
 class MainWindow:
@@ -254,22 +254,28 @@ class MainWindow:
             style="Primary.TButton", command=self._cmd_add,
         ).pack()
 
-        self._profile_listbox = tk.Listbox(
+        self._profile_tree = ttk.Treeview(
             list_shell,
-            height=12,
-            font=(MONO_FONT, 10),
-            exportselection=False,
+            columns=("name", "hotkey", "steps"),
+            show="headings",
+            selectmode="browse",
+            style="App.Treeview",
         )
-        style_listbox(self._profile_listbox)
-        self._profile_listbox.grid(row=0, column=0, sticky="nsew")
-        self._profile_listbox.bind("<<ListboxSelect>>", self._on_profile_select)
+        self._profile_tree.heading("name",   text="Profile", anchor="w")
+        self._profile_tree.heading("hotkey", text="Hotkey",  anchor="w")
+        self._profile_tree.heading("steps",  text="Steps",   anchor="center")
+        self._profile_tree.column("name",   stretch=True,  minwidth=150, anchor="w")
+        self._profile_tree.column("hotkey", stretch=False, width=130,    anchor="w")
+        self._profile_tree.column("steps",  stretch=False, width=60,     anchor="center")
+        self._profile_tree.grid(row=0, column=0, sticky="nsew")
+        self._profile_tree.bind("<<TreeviewSelect>>", self._on_profile_select)
 
         profile_scroll = ttk.Scrollbar(
-            list_shell, orient="vertical", command=self._profile_listbox.yview,
+            list_shell, orient="vertical", command=self._profile_tree.yview,
             style="App.Vertical.TScrollbar",
         )
         profile_scroll.grid(row=0, column=1, sticky="ns")
-        self._profile_listbox.configure(yscrollcommand=profile_scroll.set)
+        self._profile_tree.configure(yscrollcommand=profile_scroll.set)
 
         profile_btn_frame = ttk.Frame(panel, style="Card.TFrame")
         profile_btn_frame.grid(row=4, column=0, sticky="ew", pady=(14, 0))
@@ -438,25 +444,22 @@ class MainWindow:
         return self._profile_store.get_by_id(profile_id)
 
     def _refresh_profile_list(self) -> None:
-        self._profile_listbox.delete(0, tk.END)
+        for item in self._profile_tree.get_children():
+            self._profile_tree.delete(item)
         profiles = self._load_profiles()
         active_id = self._state.get_active_profile_id()
-        active_index = None
 
-        for index, profile in enumerate(profiles):
-            marker = "ACTIVE" if profile.id == active_id else "READY "
-            hotkey_str = profile.hotkey or "manual"
-            step_count = len(profile.steps)
-            self._profile_listbox.insert(
-                tk.END,
-                f"{marker:<6}  {profile.name:<18}  {step_count:>2} steps  [{hotkey_str:<14}]",
+        for profile in profiles:
+            hotkey_str = profile.hotkey or "\u2014"
+            self._profile_tree.insert(
+                "", "end",
+                iid=profile.id,
+                values=(profile.name, hotkey_str, str(len(profile.steps))),
             )
-            if profile.id == active_id:
-                active_index = index
 
-        if active_index is not None:
-            self._profile_listbox.selection_clear(0, tk.END)
-            self._profile_listbox.selection_set(active_index)
+        if active_id and self._profile_tree.exists(active_id):
+            self._profile_tree.selection_set(active_id)
+            self._profile_tree.see(active_id)
 
         self._profile_count_label.config(text=f"{len(profiles)}/{MAX_PROFILES} profiles")
         self._update_profile_details()
@@ -473,12 +476,13 @@ class MainWindow:
         self._stop_btn.config(state="normal" if runner_busy else "disabled")
 
     def _on_profile_select(self, event) -> None:
-        selection = self._profile_listbox.curselection()
-        profiles = self._load_profiles()
-        if not selection or selection[0] >= len(profiles):
+        selection = self._profile_tree.selection()
+        if not selection:
             return
-        self._state.set_active_profile_id(profiles[selection[0]].id)
-        self._refresh_profile_list()
+        # selection[0] is the iid, which equals profile.id
+        self._state.set_active_profile_id(selection[0])
+        self._update_profile_details()
+        self._update_action_buttons()
 
     def _cmd_add(self) -> None:
         if self._profile_store is None:
