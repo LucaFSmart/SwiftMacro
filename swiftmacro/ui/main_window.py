@@ -112,16 +112,6 @@ class MainWindow:
         )
         self._update_chip.config(cursor="hand2")
         # Note: _update_chip is intentionally NOT packed here — _poll() controls visibility
-        tk.Label(
-            left,
-            text="Create a profile, preview its steps on the right, then run it directly or via hotkey.",
-            bg=COLORS["bg"],
-            fg=COLORS["muted"],
-            font=("Segoe UI", 10),
-            anchor="w",
-            justify="left",
-            wraplength=520,
-        ).pack(anchor="w", pady=(18, 0))
 
         status_card = ttk.Frame(hero, style="AltCard.TFrame", padding=(18, 18, 18, 18))
         status_card.grid(row=0, column=1, sticky="nsew")
@@ -283,31 +273,31 @@ class MainWindow:
             profile_btn_frame.columnconfigure(column, weight=1)
 
         self._add_btn = ttk.Button(
-            profile_btn_frame, text="Add", style="Primary.TButton", command=self._cmd_add
+            profile_btn_frame, text="＋  Add", style="Primary.TButton", command=self._cmd_add
         )
         self._add_btn.grid(row=0, column=0, sticky="ew", padx=(0, 6))
         self._edit_btn = ttk.Button(
-            profile_btn_frame, text="Edit", style="Secondary.TButton", command=self._cmd_edit
+            profile_btn_frame, text="✎  Edit", style="Secondary.TButton", command=self._cmd_edit
         )
         self._edit_btn.grid(row=0, column=1, sticky="ew", padx=6)
         self._duplicate_btn = ttk.Button(
             profile_btn_frame,
-            text="Duplicate",
+            text="⊞  Copy",
             style="Secondary.TButton",
             command=self._cmd_duplicate,
         )
         self._duplicate_btn.grid(row=0, column=2, sticky="ew", padx=6)
         self._delete_btn = ttk.Button(
-            profile_btn_frame, text="Delete", style="Danger.TButton", command=self._cmd_delete
+            profile_btn_frame, text="✕  Delete", style="Danger.TButton", command=self._cmd_delete
         )
         self._delete_btn.grid(row=0, column=3, sticky="ew", padx=6)
         self._run_btn = ttk.Button(
-            profile_btn_frame, text="Run", style="Primary.TButton", command=self._cmd_run
+            profile_btn_frame, text="▶  Run", style="Primary.TButton", command=self._cmd_run
         )
         self._run_btn.grid(row=0, column=4, sticky="ew", padx=6)
         self._stop_btn = ttk.Button(
             profile_btn_frame,
-            text="Stop",
+            text="■  Stop",
             style="Secondary.TButton",
             command=self._cmd_stop_chain,
         )
@@ -368,11 +358,11 @@ class MainWindow:
         ).pack(anchor="w", pady=(4, 14))
 
         self._import_btn = ttk.Button(
-            import_card, text="Import Profiles", style="Secondary.TButton", command=self._cmd_import
+            import_card, text="↓  Import", style="Secondary.TButton", command=self._cmd_import
         )
         self._import_btn.pack(fill="x")
         self._export_btn = ttk.Button(
-            import_card, text="Export Selection", style="Primary.TButton", command=self._cmd_export
+            import_card, text="↑  Export", style="Primary.TButton", command=self._cmd_export
         )
         self._export_btn.pack(fill="x", pady=(10, 0))
 
