@@ -122,7 +122,7 @@ def test_step_builder_can_edit_existing_step(tk_root):
 
     assert len(dialog._steps) == 1
     assert dialog._steps[0].params == {"x": 99, "y": 88}
-    assert dialog._add_step_btn.cget("text") == "+ Add Step"
+    assert dialog._add_step_btn.cget("text") == "＋  Add Step"
 
     dialog.top.destroy()
 
@@ -413,3 +413,22 @@ def test_format_profile_step_includes_icon():
         assert STEP_ICONS["click"] in result2
     finally:
         root.destroy()
+
+
+def test_step_builder_dialog_is_wider(tk_root):
+    """Step builder dialog must be at least 900px wide."""
+    from swiftmacro.ui.step_builder import StepBuilderDialog
+    dialog = StepBuilderDialog(tk_root, _Store([]))
+    min_w, _ = dialog.top.minsize()
+    dialog.top.destroy()
+    assert min_w >= 860, f"Step builder minwidth should be >= 860, got {min_w}"
+
+
+def test_step_builder_format_label_has_icons():
+    """format_step_label() in step_builder must use STEP_ICONS."""
+    from swiftmacro.constants import STEP_ICONS
+    from swiftmacro.models import ActionStep
+    from swiftmacro.ui.step_builder import format_step_label
+    step = ActionStep(action="keypress", params={"key": "enter"})
+    result = format_step_label(step)
+    assert STEP_ICONS["keypress"] in result
