@@ -334,3 +334,11 @@ def test_param_fields_widget_types(tk_root):
     assert str(dir_widget.cget("state")) == "readonly"
 
     dialog.top.destroy()
+
+
+def test_treeview_style_configured(tk_root):
+    """App.Treeview style must be registered after configure_theme()."""
+    from swiftmacro.ui.theme import configure_theme
+    style = configure_theme(tk_root)
+    # If the style is not registered, layout() returns an empty list
+    assert style.layout("App.Treeview") != []
