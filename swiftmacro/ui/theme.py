@@ -223,6 +223,28 @@ def configure_theme(root: tk.Misc) -> ttk.Style:
         darkcolor=COLORS["accent"],
         thickness=5,
     )
+    style.configure(
+        "App.Treeview",
+        background=COLORS["entry_bg"],
+        foreground=COLORS["text"],
+        fieldbackground=COLORS["entry_bg"],
+        borderwidth=0,
+        rowheight=36,
+        font=(FONT_FAMILY, 10),
+    )
+    style.configure(
+        "App.Treeview.Heading",
+        background=COLORS["surface_soft"],
+        foreground=COLORS["muted"],
+        relief="flat",
+        font=(FONT_FAMILY, 9, "bold"),
+        padding=(8, 6),
+    )
+    style.map(
+        "App.Treeview",
+        background=[("selected", COLORS["selection"])],
+        foreground=[("selected", COLORS["text"])],
+    )
     return style
 
 
