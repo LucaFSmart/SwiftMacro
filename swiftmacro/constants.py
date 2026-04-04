@@ -20,6 +20,29 @@ ICON_SIZE = 64
 MAX_PROFILES = 20
 MAX_STEPS = 100
 
+# UI spacing system (pixels)
+SPACING: dict[str, int] = {
+    "xs":  4,
+    "sm":  8,
+    "md":  12,
+    "lg":  18,
+    "xl":  26,
+    "xxl": 40,
+}
+
+# Step-type icons (Unicode symbols safe for Segoe UI on Windows)
+STEP_ICONS: dict[str, str] = {
+    "move":         "→",
+    "click":        "●",
+    "repeat_click": "◎",
+    "keypress":     "⌨",
+    "wait":         "⏸",
+    "lock":         "⊕",
+    "scroll":       "↕",
+    "hold_key":     "⌨",
+    "random_delay": "~",
+}
+
 # File paths (expanded at runtime via os.path.expanduser)
 PROFILES_DIR = "~/.swiftmacro"
 PROFILES_FILE = "~/.swiftmacro/profiles.json"

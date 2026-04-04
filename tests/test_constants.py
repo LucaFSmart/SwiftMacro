@@ -38,3 +38,18 @@ def test_github_repo_defined():
     assert "owner" not in GITHUB_REPO, (
         "Replace the 'owner' placeholder in GITHUB_REPO with your actual GitHub username"
     )
+
+
+def test_spacing_dict_present():
+    from swiftmacro.constants import SPACING
+    for key in ("xs", "sm", "md", "lg", "xl", "xxl"):
+        assert key in SPACING, f"Missing SPACING key: {key!r}"
+        assert isinstance(SPACING[key], int) and SPACING[key] > 0
+
+
+def test_step_icons_covers_all_valid_actions():
+    from swiftmacro.constants import STEP_ICONS
+    from swiftmacro.models import VALID_ACTIONS
+    for action in VALID_ACTIONS:
+        assert action in STEP_ICONS, f"Missing STEP_ICONS entry for action: {action!r}"
+        assert STEP_ICONS[action], f"Empty icon for action: {action!r}"
