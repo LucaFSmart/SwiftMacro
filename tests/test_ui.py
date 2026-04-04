@@ -388,3 +388,28 @@ def test_action_buttons_have_icons(tk_root):
     assert "■" in win._stop_btn.cget("text")
     assert "＋" in win._add_btn.cget("text")
     assert "✕" in win._delete_btn.cget("text")
+
+
+def test_format_profile_step_includes_icon():
+    """_format_profile_step must prefix the line with the STEP_ICONS symbol."""
+    from swiftmacro.constants import STEP_ICONS
+    from swiftmacro.models import ActionStep
+
+    # We test this via a minimal MainWindow-free call — the method is pure.
+    # Instantiate a temporary object to call the method.
+    import tkinter as tk
+    from swiftmacro.state import make_state
+    from swiftmacro.ui.main_window import MainWindow
+
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        win = MainWindow(root, make_state(), tray_available=False)
+        step = ActionStep(action="wait", params={"ms": 500})
+        result = win._format_profile_step(step)
+        assert STEP_ICONS["wait"] in result, f"Expected icon in: {result!r}"
+        step2 = ActionStep(action="click", params={"button": "left", "x": 0, "y": 0})
+        result2 = win._format_profile_step(step2)
+        assert STEP_ICONS["click"] in result2
+    finally:
+        root.destroy()

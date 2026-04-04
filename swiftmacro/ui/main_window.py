@@ -5,7 +5,7 @@ import tkinter as tk
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
 
-from swiftmacro.constants import APP_NAME, MAX_PROFILES, UI_POLL_MS
+from swiftmacro.constants import APP_NAME, MAX_PROFILES, STEP_ICONS, UI_POLL_MS
 from swiftmacro.hotkeys import _shutdown_ref
 from swiftmacro.state import AppState
 from swiftmacro.ui.theme import COLORS, HEADING_FONT, configure_theme, make_chip
@@ -632,25 +632,34 @@ class MainWindow:
         self._selected_profile_steps.config(text="\n".join(preview_lines))
 
     def _format_profile_step(self, step) -> str:
+        icon = STEP_ICONS.get(step.action, "·")
         params = step.params
         if step.action == "move":
-            return f"Move to {params.get('x')}, {params.get('y')}"
+            return f"{icon}  Move to {params.get('x')}, {params.get('y')}"
         if step.action == "click":
-            return f"{params.get('button', 'left').title()} click at {params.get('x')}, {params.get('y')}"
+            return f"{icon}  {params.get('button', 'left').title()} click at {params.get('x')}, {params.get('y')}"
         if step.action == "repeat_click":
             return (
-                f"{params.get('button', 'left').title()} click x{params.get('count')} "
-                f"at {params.get('x')}, {params.get('y')}"
+                f"{icon}  {params.get('button', 'left').title()} click "
+                f"×{params.get('count')} at {params.get('x')}, {params.get('y')}"
             )
         if step.action == "keypress":
-            return f"Press key '{params.get('key')}'"
+            return f"{icon}  Press '{params.get('key')}'"
         if step.action == "wait":
-            return f"Wait {params.get('ms')} ms"
+            return f"{icon}  Wait {params.get('ms')} ms"
         if step.action == "lock":
             duration = params.get("duration_ms", 0)
             suffix = "forever" if duration == 0 else f"{duration} ms"
-            return f"Lock at {params.get('x')}, {params.get('y')} for {suffix}"
-        return step.action
+            return f"{icon}  Lock at {params.get('x')}, {params.get('y')} for {suffix}"
+        if step.action == "scroll":
+            return f"{icon}  Scroll {params.get('direction')} ×{params.get('amount')} at {params.get('x')}, {params.get('y')}"
+        if step.action == "hold_key":
+            duration = params.get("duration_ms", 0)
+            suffix = "until stopped" if duration == 0 else f"{duration} ms"
+            return f"{icon}  Hold '{params.get('key')}' {suffix}"
+        if step.action == "random_delay":
+            return f"{icon}  Random delay {params.get('min_ms')}–{params.get('max_ms')} ms"
+        return f"{icon}  {step.action}"
 
     def _poll(self) -> None:
         if self._state.stop_event.is_set():
