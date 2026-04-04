@@ -373,3 +373,18 @@ def test_profile_tree_populated_from_store(tk_root):
     items = win._profile_tree.get_children()
     assert len(items) == 1
     assert items[0] == p.id  # iid == profile.id
+
+
+def test_action_buttons_have_icons(tk_root):
+    """Run and Stop buttons must have icon prefixes."""
+    from swiftmacro.state import make_state
+    from swiftmacro.ui.main_window import MainWindow
+
+    for child in tk_root.winfo_children():
+        child.destroy()
+    win = MainWindow(tk_root, make_state(), tray_available=False)
+    tk_root.update_idletasks()
+    assert "▶" in win._run_btn.cget("text")
+    assert "■" in win._stop_btn.cget("text")
+    assert "＋" in win._add_btn.cget("text")
+    assert "✕" in win._delete_btn.cget("text")
