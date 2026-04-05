@@ -4,7 +4,23 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 # Read version and repo from constants
 $version = py -c "from swiftmacro.constants import APP_VERSION; print(APP_VERSION)"
+if ($LASTEXITCODE -ne 0 -or -not $version) { Write-Error "Failed to read APP_VERSION"; exit 1 }
 $githubRepo = py -c "from swiftmacro.constants import GITHUB_REPO; print(GITHUB_REPO)"
+if ($LASTEXITCODE -ne 0 -or -not $githubRepo) { Write-Error "Failed to read GITHUB_REPO"; exit 1 }
+
+# Guard against dirty working tree
+$status = git status --porcelain
+if ($status) {
+    Write-Error "Working tree is dirty. Commit or stash changes before releasing."
+    exit 1
+}
+
+# Guard against duplicate tag
+$existingTag = git tag -l "v$version"
+if ($existingTag) {
+    Write-Error "Tag v$version already exists. Bump APP_VERSION first."
+    exit 1
+}
 
 # Guard against unfilled placeholder
 if ($githubRepo -match "owner") {
@@ -44,6 +60,7 @@ Write-Host $changelog
 
 # Create GitHub Release
 gh release create "v$version" `
+    --repo "$githubRepo" `
     --title "SwiftMacro v$version" `
     --notes "$changelog" `
     $exePath `

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import threading
+import typing
 
 from swiftmacro.action_runner import ActionRunner
 from swiftmacro.constants import APP_ID, APP_MUTEX_NAME
@@ -24,7 +25,7 @@ def make_shutdown(
     tray_mgr: TrayManager | None,
     instance_guard: SingleInstanceGuard,
     root,
-) -> callable:
+) -> typing.Callable[[], None]:
     def destroy_root() -> None:
         try:
             root.quit()

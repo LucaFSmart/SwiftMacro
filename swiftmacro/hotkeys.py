@@ -95,7 +95,7 @@ class HotkeyManager:
             try:
                 keyboard.add_hotkey(
                     profile.hotkey,
-                    lambda p=profile: self._on_profile_hotkey(p),
+                    lambda pid=profile.id: self._on_profile_hotkey(pid),
                     suppress=False,
                 )
                 self._profile_hotkeys.append(profile.hotkey)
@@ -131,6 +131,11 @@ class HotkeyManager:
         if self._action_runner is not None:
             self._action_runner.stop()
 
-    def _on_profile_hotkey(self, profile) -> None:
-        if self._action_runner is not None:
-            self._action_runner.run_profile(profile)
+    def _on_profile_hotkey(self, profile_id: str) -> None:
+        if self._action_runner is None or self._profile_store is None:
+            return
+        profile = self._profile_store.get_by_id(profile_id)
+        if profile is None:
+            self._state.set_status_message("Profile not found")
+            return
+        self._action_runner.run_profile(profile)

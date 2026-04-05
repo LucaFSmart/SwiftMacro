@@ -29,6 +29,6 @@ def check_for_update(repo: str, current_version: str) -> tuple[bool, str]:
             return True, html_url
         return False, ""
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).debug("Update check failed: %s", exc)
+        from swiftmacro.log import get_logger
+        get_logger("updater").info("Update check failed: %s", exc)
         return False, ""

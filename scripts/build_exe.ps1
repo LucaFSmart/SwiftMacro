@@ -16,9 +16,11 @@ target = Path("build/swiftmacro.ico")
 target.write_bytes(source.read_bytes())
 print(target)
 '@ | py -
+if ($LASTEXITCODE -ne 0) { Write-Error "Icon export failed"; exit 1 }
 
 # Read version from constants and generate Windows VERSIONINFO file
 $version = py -c "from swiftmacro.constants import APP_VERSION; print(APP_VERSION)"
+if ($LASTEXITCODE -ne 0 -or -not $version) { Write-Error "Failed to read APP_VERSION from constants.py"; exit 1 }
 Write-Host "Building SwiftMacro v$version"
 
 $parts = $version -split '\.'
@@ -53,7 +55,6 @@ py -m PyInstaller `
     --noconfirm `
     --clean `
     --onefile `
-    --windowed `
     --noconsole `
     --name SwiftMacro `
     --specpath build `
@@ -64,5 +65,7 @@ py -m PyInstaller `
     --collect-submodules packaging `
     --hidden-import PIL._tkinter_finder `
     swiftmacro.pyw
+
+if ($LASTEXITCODE -ne 0) { Write-Error "PyInstaller failed with exit code $LASTEXITCODE"; exit 1 }
 
 Write-Host "Build complete: dist\SwiftMacro.exe"

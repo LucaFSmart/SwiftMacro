@@ -23,13 +23,13 @@ A Windows desktop utility for creating and running reusable mouse and keyboard a
 
 ### Option A: Windows Installer (recommended)
 
-Download the latest `SwiftMacro-Setup.exe` from the [Releases](https://github.com/swiftmacro-app/SwiftMacro/releases) page and run it. No Python required.
+Download the latest `SwiftMacro-Setup.exe` from the [Releases](https://github.com/LucaFSmart/SwiftMacro/releases) page and run it. No Python required.
 
 ### Option B: Run from source
 
 ```bash
 # Clone the repository
-git clone https://github.com/swiftmacro-app/SwiftMacro.git
+git clone https://github.com/LucaFSmart/SwiftMacro.git
 cd SwiftMacro
 
 # Install dependencies

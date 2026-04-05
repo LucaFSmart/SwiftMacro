@@ -108,7 +108,7 @@ class MainWindow:
         )
         self._update_chip.bind(
             "<Button-1>",
-            lambda _: webbrowser.open(self._state.get_update_available()[1]),
+            self._open_update_url,
         )
         self._update_chip.config(cursor="hand2")
         # Note: _update_chip is intentionally NOT packed here — _poll() controls visibility
@@ -422,6 +422,11 @@ class MainWindow:
         )
         self._footer_label.pack(anchor="w", pady=(4, 0))
 
+    def _open_update_url(self, _event=None) -> None:
+        _, url = self._state.get_update_available()
+        if url:
+            webbrowser.open(url)
+
     def _load_profiles(self) -> list:
         if self._profile_store is None:
             return []
@@ -515,6 +520,9 @@ class MainWindow:
         profile = self._selected_profile()
         if profile is None:
             self._state.set_status_message("No profile selected")
+            return
+        if len(self._load_profiles()) >= MAX_PROFILES:
+            self._state.set_status_message(f"Cannot duplicate — max {MAX_PROFILES} profiles reached")
             return
         duplicate = self._profile_store.duplicate_profile(profile.id)
         self._state.set_active_profile_id(duplicate.id)
