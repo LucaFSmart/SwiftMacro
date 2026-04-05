@@ -9,3 +9,6 @@ build/
 .env
 .worktrees/
 .superpowers/
+CLAUDE.md
+AGENTS.md
+docs/superpowers/
