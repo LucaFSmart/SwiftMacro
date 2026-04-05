@@ -1,0 +1,23 @@
+[project]
+name = "swiftmacro"
+version = "1.0.0"
+description = "Windows desktop utility for reusable mouse and keyboard automation chains"
+license = "MIT"
+requires-python = ">=3.10"
+keywords = ["automation", "macro", "mouse", "keyboard", "windows"]
+
+dependencies = [
+    "keyboard>=0.13.5",
+    "pystray>=0.19.4",
+    "Pillow>=9.0.0",
+    "packaging>=21.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pyinstaller>=6.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

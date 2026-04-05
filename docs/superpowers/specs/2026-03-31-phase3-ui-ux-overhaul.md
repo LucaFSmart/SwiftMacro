@@ -1,7 +1,7 @@
 # SwiftMacro — Phase 3: UI/UX Overhaul Design Spec
 
 **Date:** 2026-03-31
-**Status:** Draft
+**Status:** Approved
 **Scope:** Theme centralization, step execution progress bar, empty-state onboarding, constrained step-builder inputs
 
 ---
@@ -26,6 +26,7 @@ Add to the `COLORS` dict:
 ```python
 # Status chips
 "chip_idle_bg":    "#17324c",
+"chip_idle_fg":    "#b7dbff",
 "chip_running_bg": "#1c5d53",
 "chip_online_bg":  "#173228",
 "chip_offline_bg": "#35221a",
@@ -71,15 +72,32 @@ def make_chip(parent, text: str, bg: str, fg: str) -> tk.Label:
         bg=bg,
         fg=fg,
         font=("Segoe UI", 9, "bold"),
-        padx=10,
-        pady=3,
+        padx=12,
+        pady=5,
     )
     return label
 ```
 
 ### 2.4 Update `main_window.py`
 
-Replace all hardcoded hex literals in `_build_layout()` and `_poll()` with `COLORS[token]` references. Replace the two raw chip `tk.Label` constructions with `make_chip()` calls. Replace the error frame hardcoded hex values with `COLORS["error_bg"]`, `COLORS["error_border"]`, `COLORS["error_text"]`.
+Update the import line in `main_window.py` to include `make_chip`:
+
+```python
+from swiftmacro.ui.theme import COLORS, HEADING_FONT, MONO_FONT, configure_theme, make_chip, style_listbox
+```
+
+Replace all hardcoded hex literals in `_build_profiles_panel()` and `_poll()` with `COLORS[token]` references:
+
+- `#17324c` → `COLORS["chip_idle_bg"]` (idle chip bg — appears in both construction and `_poll()`)
+- `#b7dbff` → `COLORS["chip_idle_fg"]` (idle chip fg — appears in both construction and `_poll()`)
+- `#1c5d53` → `COLORS["chip_running_bg"]`
+- `#173228` → `COLORS["chip_online_bg"]`
+- `#35221a` → `COLORS["chip_offline_bg"]`
+- `#31121a` → `COLORS["error_bg"]`
+- `#6d2436` → `COLORS["error_border"]`
+- `#ffb2c1` → `COLORS["error_text"]`
+
+Replace the two raw chip `tk.Label` constructions with `make_chip()` calls.
 
 **No behavior changes.** All existing tests continue to pass.
 
@@ -89,22 +107,34 @@ Replace all hardcoded hex literals in `_build_layout()` and `_poll()` with `COLO
 
 ### 3.1 AppState changes (`swiftmacro/state.py`)
 
-Add two new fields and accessor methods:
+`AppState` is a `@dataclass` — add a new field at the class body level (matching the existing pattern) and update `make_state()`:
 
 ```python
-# In AppState.__init__:
-self._chain_progress: tuple[int, int] = (0, 0)  # (current_step, total_steps)
+# New class-level field in AppState (alongside runner_busy etc.):
+chain_progress: tuple[int, int] = field(default=(0, 0))  # (current_step, total_steps)
 
+# New accessor methods on AppState:
 def set_chain_progress(self, current: int, total: int) -> None:
     with self._lock:
-        self._chain_progress = (current, total)
+        self.chain_progress = (current, total)
 
 def get_chain_progress(self) -> tuple[int, int]:
     with self._lock:
-        return self._chain_progress
+        return self.chain_progress
 ```
 
-Reset to `(0, 0)` inside `set_runner_busy(False)` so progress clears automatically when the chain finishes or is stopped.
+In `make_state()`, add `chain_progress=(0, 0)` to the `AppState(...)` call.
+
+In `set_runner_busy()`, reset progress on both transitions:
+
+```python
+def set_runner_busy(self, busy: bool) -> None:
+    with self._lock:
+        self.runner_busy = busy
+        self.chain_progress = (0, 0)  # reset on both start and stop
+```
+
+This prevents a stale 100% bar flash when a second run begins.
 
 ### 3.2 ActionRunner changes (`swiftmacro/action_runner.py`)
 
@@ -116,26 +146,55 @@ for i, step in enumerate(profile.steps):
     # ... existing step execution logic
 ```
 
+`i` is zero-based, so the bar shows 0% at step 1, `int(1/n*100)` at step 2, etc. — this is intentional. The bar represents "steps completed so far", not "step currently executing".
+
 After the loop completes (all steps done, no stop), call:
 
 ```python
 self._state.set_chain_progress(n, n)  # 100%
 ```
 
+**Note:** `_execute_chain()` calls `set_runner_busy(False)` in its `finally` block, which immediately resets `chain_progress` to `(0, 0)`. The `(n, n)` state is therefore very brief. Tests should NOT assert `chain_progress == (n, n)` after the runner finishes — instead test that `set_chain_progress` was called with `(n, n)` via a mock/spy, or test the in-progress values during execution.
+
 ### 3.3 MainWindow UI changes (`swiftmacro/ui/main_window.py`)
 
-In `_build_layout()`, after `_status_label`, add:
+In `_build_profiles_panel()`, insert the progress bar between `_status_label` (row 1) and `list_shell`. The current row layout is:
+
+| Row | Widget | Weight |
+|-----|--------|--------|
+| 0 | header | 0 |
+| 1 | `_status_label` | 0 |
+| 2 | `list_shell` | 1 |
+| 3 | `profile_btn_frame` | 0 |
+
+After inserting `_progress_bar` at row 2, shift everything down:
+
+| Row | Widget | Weight |
+|-----|--------|--------|
+| 0 | header | 0 |
+| 1 | `_status_label` | 0 |
+| 2 | `_progress_bar` | 0 |
+| 3 | `list_shell` / `_empty_state_frame` | 1 |
+| 4 | `profile_btn_frame` | 0 |
+
+Update `panel.rowconfigure(3, weight=1)` (was `rowconfigure(2, weight=1)`). `_empty_state_frame` also goes at row 3 (same slot as `list_shell`) and toggles visibility via `grid_remove()`/`grid()`.
+
+Also update `profile_btn_frame`'s grid call from row 3 to row 4:
+
+```python
+profile_btn_frame.grid(row=4, column=0, sticky="ew", pady=(14, 0))  # was row=3
+```
 
 ```python
 self._progress_bar = ttk.Progressbar(
-    profiles_panel,
+    panel,
     orient="horizontal",
     mode="determinate",
     style="Teal.Horizontal.TProgressbar",
     maximum=100,
     value=0,
 )
-# Initially hidden — only shown during a running chain
+# Do NOT grid it here — starts hidden; shown by _poll() when running
 ```
 
 Add a ttk style to `configure_theme()`:
@@ -159,7 +218,7 @@ current, total = self._state.get_chain_progress()
 if self._state.get_runner_busy() and total > 0:
     pct = int(current / total * 100)
     self._progress_bar.config(value=pct)
-    self._progress_bar.grid(...)  # show
+    self._progress_bar.grid(row=2, column=0, sticky="ew")  # show
 else:
     self._progress_bar.grid_remove()  # hide when idle
 ```
@@ -172,18 +231,23 @@ The bar is hidden (`grid_remove()`) when idle and appears automatically when a c
 
 ### 4.1 MainWindow changes (`swiftmacro/ui/main_window.py`)
 
-In `_build_layout()`, the profiles listbox area becomes a switchable container:
+In `_build_profiles_panel()`, the listbox area becomes a switchable container. During construction, store the `list_shell` frame as `self._list_shell = list_shell` so it can be shown/hidden from `_poll()`.
 
-- A `tk.Frame` container (`_list_container`) holds either the listbox or the empty-state widget, both sized to fill the same grid cell.
-- The **listbox + scrollbar** are built as before, placed inside `_list_container`.
-- An **empty-state frame** (`_empty_state_frame`) is also built inside `_list_container` but starts hidden:
+- The **listbox + scrollbar** are built as before inside `list_shell` (now also `self._list_shell`). Change its construction-time grid call from `row=2` to **`row=3`** (due to the progress bar insertion):
+
+  ```python
+  self._list_shell = list_shell
+  list_shell.grid(row=3, column=0, sticky="nsew")  # was row=2
+  ```
+
+- An **empty-state frame** (`self._empty_state_frame`) is built at the same grid slot (row 3, column 0) but starts hidden (do not call `.grid()` on it during construction — `_poll()` will show it when needed):
 
 ```
 _empty_state_frame contents (centered vertically):
   ⚡ (unicode lightning, 28pt, accent color)
   "No profiles yet"  (SectionTitle.TLabel)
   "Build a reusable action chain to get started"  (Muted.TLabel)
-  ttk.Button "＋ Add your first profile"  (Primary.TButton, calls _on_add)
+  ttk.Button "＋ Add your first profile"  (Primary.TButton, calls _cmd_add)
 ```
 
 ### 4.2 Toggle logic
@@ -194,13 +258,13 @@ In `_poll()`, after refreshing the profile list:
 profiles = self._profile_store.load()
 if profiles:
     self._empty_state_frame.grid_remove()
-    self._profiles_listbox.master.grid()  # show listbox shell
+    self._list_shell.grid()          # show listbox container
 else:
-    self._profiles_listbox.master.grid_remove()
+    self._list_shell.grid_remove()   # hide listbox container
     self._empty_state_frame.grid()
 ```
 
-The empty-state button calls the same `_on_add()` handler as the regular Add button — no duplication of logic.
+The empty-state button calls the same `_cmd_add()` handler as the regular Add button — no duplication of logic.
 
 ---
 
@@ -208,43 +272,21 @@ The empty-state button calls the same `_on_add()` handler as the regular Add but
 
 ### 5.1 `_PARAM_FIELDS` structure change (`swiftmacro/ui/step_builder.py`)
 
-Extend each field tuple from 3 elements to 4:
+Extend each field tuple from 3 elements to 4. Update the type annotation from `dict[str, list[tuple[str, str, str]]]` to `dict[str, list[tuple[str, ...]]]`:
 
-```python
-# (name, label, default, widget_type)
-# widget_type: "entry" | "combo" | "key_combo"
-```
+Change the type annotation at the top of the dict from `dict[str, list[tuple[str, str, str]]]` to `dict[str, list[tuple[str, ...]]]`.
 
-Updated entries:
+**Do NOT replace the entire dict.** Only add a 4th element to these specific tuples (leave all others untouched):
 
-```python
-"click": [
-    ("button", "Button", "left", "combo"),   # was "entry"
-    ("x", "X", "0", "entry"),
-    ("y", "Y", "0", "entry"),
-],
-"repeat_click": [
-    ("button", "Button", "left", "combo"),
-    ("x", "X", "0", "entry"),
-    ("y", "Y", "0", "entry"),
-    ("count", "Count", "5", "entry"),
-    ("interval_ms", "Interval (ms)", "100", "entry"),
-],
-"keypress": [("key", "Key", "enter", "key_combo")],
-"hold_key": [
-    ("key", "Key", "w", "key_combo"),
-    ("duration_ms", "Duration (ms, 0 = until stopped)", "500", "entry"),
-],
-"scroll": [
-    ("x", "X", "0", "entry"),
-    ("y", "Y", "0", "entry"),
-    ("direction", "Direction", "down", "combo"),  # was "entry"
-    ("amount", "Amount (notches)", "3", "entry"),
-],
-# All other fields keep widget_type "entry"
-```
+| Action | Field | Change |
+|--------|-------|--------|
+| `click` | `button` | `("button", "Button", "left")` → `("button", "Button", "left", "combo")` |
+| `repeat_click` | `button` | same change |
+| `keypress` | `key` | `("key", "Key", "enter")` → `("key", "Key", "enter", "key_combo")` |
+| `hold_key` | `key` | `("key", "Key", "w")` → `("key", "Key", "w", "key_combo")` |
+| `scroll` | `direction` | `("direction", "Direction", "down")` → `("direction", "Direction", "down", "combo")` |
 
-Fields without a 4th element default to `"entry"` (backward-compatible — no change for `move`, `wait`, `lock`, `random_delay`).
+All tuples in `move`, `wait`, `lock`, and `random_delay` remain unchanged as 3-tuples.
 
 ### 5.2 Combo values
 
@@ -303,6 +345,14 @@ def _build_param_fields(self, action: str) -> None:
         widget.grid(row=row, column=1, sticky="ew", padx=(10, 0), pady=(0, 6))
         self._param_entries[name] = widget
         self._param_vars[name] = var
+
+    # Preserve these two existing post-loop lines — do not remove them:
+    self._param_frame.columnconfigure(1, weight=1)
+
+    if action in _NEEDS_POSITION:
+        self._pick_btn.pack(side="right")
+    else:
+        self._pick_btn.pack_forget()
 ```
 
 ### 5.4 `_add_step()` — no changes needed
@@ -318,9 +368,9 @@ def _build_param_fields(self, action: str) -> None:
 | `swiftmacro/ui/theme.py` | New color tokens, `make_chip()` helper, scrollbar style, progress bar style |
 | `swiftmacro/ui/main_window.py` | Use `COLORS` tokens + `make_chip()`; add progress bar; add empty-state frame |
 | `swiftmacro/ui/step_builder.py` | Extend `_PARAM_FIELDS` tuples; add `_COMBO_VALUES` + `COMMON_KEYS`; update `_build_param_fields()` |
-| `swiftmacro/state.py` | Add `_chain_progress`, `set_chain_progress()`, `get_chain_progress()`; reset in `set_runner_busy(False)` |
+| `swiftmacro/state.py` | Add `chain_progress` dataclass field + `make_state()` init; add `set_chain_progress()`, `get_chain_progress()`; reset in `set_runner_busy()` on both `True` and `False` |
 | `swiftmacro/action_runner.py` | Call `set_chain_progress(i, n)` per step and `(n, n)` on completion |
-| `tests/test_state.py` | Tests for `set_chain_progress`, `get_chain_progress`, reset-on-busy-false |
+| `tests/test_state.py` | Tests for `set_chain_progress`, `get_chain_progress`, reset on `set_runner_busy(True)` and `set_runner_busy(False)` |
 | `tests/test_action_runner.py` | Test that progress is reported per step |
 | `tests/test_ui.py` | Tests for empty-state visibility toggle; progress bar shown/hidden; combo widgets in step builder |
 
