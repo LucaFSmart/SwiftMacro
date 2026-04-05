@@ -11,4 +11,5 @@ build/
 .superpowers/
 CLAUDE.md
 AGENTS.md
+.claude/
 docs/superpowers/
