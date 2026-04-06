@@ -20,6 +20,11 @@ class ProfileImportResult:
     imported_ids: list[str]
     cleared_hotkeys: int
     skipped_invalid: int
+    parse_errors: list[str] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.parse_errors is None:
+            self.parse_errors = []
 
 
 class ProfileStore:
@@ -46,7 +51,6 @@ class ProfileStore:
     def _maybe_migrate(self) -> None:
         """Migrate profiles from the legacy ~/.mouse_lock location if needed."""
         import shutil
-        import tempfile as _tempfile
 
         legacy_file = self._legacy_dir / "profiles.json"
         if self._file.exists() or not legacy_file.exists():
@@ -54,7 +58,7 @@ class ProfileStore:
 
         tmp_path_str = None
         try:
-            tmp_fd, tmp_path_str = _tempfile.mkstemp(dir=str(self._dir), suffix=".tmp")
+            tmp_fd, tmp_path_str = tempfile.mkstemp(dir=str(self._dir), suffix=".tmp")
             os.close(tmp_fd)
             shutil.copy2(str(legacy_file), tmp_path_str)
             os.replace(tmp_path_str, str(self._file))
@@ -74,12 +78,28 @@ class ProfileStore:
             return []
         try:
             data = json.loads(self._file.read_text(encoding="utf-8"))
-            profiles = [Profile.from_dict(d) for d in data]
-            _log.info("Loaded %d profile(s) from %s", len(profiles), self._file)
-            return profiles
         except Exception as exc:
-            _log.warning("Failed to load profiles from %s: %s", self._file, exc)
+            _log.warning("Failed to parse profiles JSON at %s: %s", self._file, exc)
             return []
+        if not isinstance(data, list):
+            _log.warning("profiles.json at %s is not a list — ignoring", self._file)
+            return []
+        profiles: list[Profile] = []
+        skipped = 0
+        for entry in data:
+            try:
+                profiles.append(Profile.from_dict(entry))
+            except Exception as exc:
+                skipped += 1
+                _log.warning("Skipping malformed profile entry: %s", exc)
+        if skipped:
+            _log.warning(
+                "Loaded %d profile(s) from %s (%d skipped)",
+                len(profiles), self._file, skipped,
+            )
+        else:
+            _log.info("Loaded %d profile(s) from %s", len(profiles), self._file)
+        return profiles
 
     def _save_to_disk(self) -> None:
         data = [p.to_dict() for p in self._profiles]
@@ -166,11 +186,11 @@ class ProfileStore:
             return len(profiles)
 
     def import_profiles(self, import_path: str) -> ProfileImportResult:
-        raw_profiles = self._read_import_file(import_path)
+        raw_profiles, parse_errors = self._read_import_file(import_path)
         imported_ids: list[str] = []
         cleared_hotkeys = 0
         valid_profiles = [profile for profile in raw_profiles if self._profile_is_valid(profile)]
-        skipped_invalid = len(raw_profiles) - len(valid_profiles)
+        skipped_invalid = len(raw_profiles) - len(valid_profiles) + len(parse_errors)
 
         with self._lock:
             if len(self._profiles) + len(valid_profiles) > MAX_PROFILES:
@@ -212,6 +232,7 @@ class ProfileStore:
             imported_ids=imported_ids,
             cleared_hotkeys=cleared_hotkeys,
             skipped_invalid=skipped_invalid,
+            parse_errors=parse_errors,
         )
 
     @staticmethod
@@ -233,10 +254,17 @@ class ProfileStore:
             return False
         if not profile.steps:
             return False
+        if profile.has_blocking_lock_before_end():
+            return False
         return all(step.validate() for step in profile.steps)
 
     @staticmethod
-    def _read_import_file(import_path: str) -> list[Profile]:
+    def _read_import_file(import_path: str) -> tuple[list[Profile], list[str]]:
+        """Parse an import file. Returns (profiles, parse_errors).
+
+        Individual malformed entries are skipped and reported in parse_errors;
+        only an unreadable file or an unsupported top-level type raises.
+        """
         try:
             raw = json.loads(Path(import_path).read_text(encoding="utf-8"))
         except Exception as exc:
@@ -247,7 +275,12 @@ class ProfileStore:
         if not isinstance(raw, list):
             raise ValueError("Profile import must contain a profile object or list")
 
-        try:
-            return [Profile.from_dict(item) for item in raw]
-        except Exception as exc:
-            raise ValueError("Profile file format is invalid") from exc
+        profiles: list[Profile] = []
+        errors: list[str] = []
+        for index, item in enumerate(raw):
+            try:
+                profiles.append(Profile.from_dict(item))
+            except Exception as exc:
+                errors.append(f"Entry {index}: {exc}")
+                _log.warning("Skipping malformed import entry %d: %s", index, exc)
+        return profiles, errors

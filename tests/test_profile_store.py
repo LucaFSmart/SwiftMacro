@@ -242,6 +242,76 @@ def test_migrate_profiles_on_first_launch(tmp_path, caplog):
         f"Expected migration INFO log, got: {[r.message for r in caplog.records]}"
 
 
+def test_load_skips_individual_malformed_profile(tmp_path, caplog):
+    """A bad entry in profiles.json must not lose the whole file."""
+    (tmp_path / "profiles.json").write_text(
+        json.dumps(
+            [
+                {"id": "ok", "name": "Good", "hotkey": None,
+                 "steps": [{"action": "wait", "params": {"ms": 10}}]},
+                {"name": "Missing ID"},
+                "not even a dict",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    with caplog.at_level(logging.WARNING, logger="swiftmacro.profile_store"):
+        store = ProfileStore(profiles_dir=str(tmp_path), legacy_dir=str(tmp_path / "legacy_nonexistent"))
+    profiles = store.load()
+    assert len(profiles) == 1
+    assert profiles[0].name == "Good"
+
+
+def test_import_partial_with_malformed_entries(tmp_path):
+    """Malformed entries are reported in parse_errors but valid ones are imported."""
+    store = ProfileStore(profiles_dir=str(tmp_path / "profiles"), legacy_dir=str(tmp_path / "legacy_nonexistent"))
+    import_path = tmp_path / "import.json"
+    import_path.write_text(
+        json.dumps(
+            [
+                {"id": "ok", "name": "Good", "hotkey": None,
+                 "steps": [{"action": "wait", "params": {"ms": 10}}]},
+                {"id": "bad", "name": "Broken", "hotkey": None, "steps": "wait"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = store.import_profiles(str(import_path))
+
+    assert len(result.imported_ids) == 1
+    assert len(result.parse_errors) == 1
+    assert result.skipped_invalid >= 1
+    assert "Entry 1" in result.parse_errors[0]
+
+
+def test_import_rejects_profile_with_blocking_lock_not_last(tmp_path):
+    """A profile with a permanent lock followed by more steps is unreachable —
+    treated as invalid and skipped during import."""
+    store = ProfileStore(profiles_dir=str(tmp_path / "profiles"), legacy_dir=str(tmp_path / "legacy_nonexistent"))
+    import_path = tmp_path / "import.json"
+    import_path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "blocked",
+                    "name": "Blocked",
+                    "hotkey": None,
+                    "steps": [
+                        {"action": "lock", "params": {"x": 0, "y": 0, "duration_ms": 0}},
+                        {"action": "wait", "params": {"ms": 10}},
+                    ],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = store.import_profiles(str(import_path))
+    assert result.imported_ids == []
+    assert result.skipped_invalid == 1
+
+
 def test_migrate_profiles_failure_leaves_no_partial_file(tmp_path, caplog, monkeypatch):
     """If migration copy raises, no partial file is left at destination."""
     old_dir = tmp_path / "old"
