@@ -1,0 +1,110 @@
+name: Release
+
+# Runs when a GitHub Release is published (manually, via gh CLI, or via
+# scripts/release.ps1). Builds SwiftMacro.exe and SwiftMacro-Setup.exe and
+# uploads them as release assets if missing.
+#
+# Idempotent by design: if both assets are already attached to the release
+# (because scripts/release.ps1 uploaded them locally), the build steps are
+# skipped and the job is a no-op. This lets the local release flow and CI
+# coexist without duplicate work.
+
+on:
+  release:
+    types: [published]
+  # Manual trigger for re-running against an existing release (useful when a
+  # release was created without assets, or for verifying the workflow itself).
+  # Idempotent: the asset-existence check still applies.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and upload assets for (e.g. v1.1.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check existing release assets
+        id: check_assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.event.release.tag_name || inputs.tag }}"
+          $assets = gh release view $tag --json assets --jq '.assets[].name'
+          $hasExe = $assets -contains "SwiftMacro.exe"
+          $hasInstaller = $assets -contains "SwiftMacro-Setup.exe"
+          Write-Host "Tag: $tag"
+          Write-Host "Existing assets: $assets"
+          Write-Host "SwiftMacro.exe present: $hasExe"
+          Write-Host "SwiftMacro-Setup.exe present: $hasInstaller"
+          if ($hasExe -and $hasInstaller) {
+            Write-Host "Both artifacts already attached; skipping build."
+            "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } else {
+            "skip=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+
+      - name: Install dependencies
+        if: steps.check_assets.outputs.skip == 'false'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e ".[dev]"
+
+      - name: Install Inno Setup 6
+        if: steps.check_assets.outputs.skip == 'false'
+        run: choco install innosetup --no-progress -y
+
+      - name: Alias py launcher to setup-python interpreter (scripts use `py`)
+        if: steps.check_assets.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          # The build scripts call `py` directly. windows-latest has the py
+          # launcher preinstalled, but actions/setup-python installs a fresh
+          # Python that py does not always discover. Create a batch shim so
+          # `py` resolves to the same interpreter as `python`.
+          $pythonPath = (Get-Command python).Source
+          Write-Host "Aliasing 'py' to $pythonPath"
+          $shimDir = Join-Path $env:RUNNER_TEMP "pyshim"
+          New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
+          $shimContent = "@echo off`r`n`"$pythonPath`" %*`r`n"
+          Set-Content -Path (Join-Path $shimDir "py.cmd") -Value $shimContent -Encoding ascii -NoNewline
+          Add-Content -Path $env:GITHUB_PATH -Value $shimDir
+          # Sanity check in-process (PATH updates only apply to subsequent steps)
+          & (Join-Path $shimDir "py.cmd") -c "import sys; print('py shim ->', sys.executable)"
+
+      - name: Build SwiftMacro.exe
+        if: steps.check_assets.outputs.skip == 'false'
+        shell: pwsh
+        run: .\scripts\build_exe.ps1
+
+      - name: Build SwiftMacro-Setup.exe
+        if: steps.check_assets.outputs.skip == 'false'
+        shell: pwsh
+        run: .\scripts\build_installer.ps1
+
+      - name: Upload assets to release
+        if: steps.check_assets.outputs.skip == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.event.release.tag_name || inputs.tag }}"
+          gh release upload $tag dist\SwiftMacro.exe dist\SwiftMacro-Setup.exe --clobber
