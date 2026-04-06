@@ -52,8 +52,54 @@ def test_profile_create_new_generates_uuid():
 def test_valid_actions_complete():
     assert VALID_ACTIONS == {
         "move", "click", "repeat_click", "keypress", "wait", "lock",
-        "scroll", "hold_key", "random_delay",
+        "scroll", "hold_key", "random_delay", "text_input", "mouse_drag",
     }
+
+
+def test_text_input_validation():
+    assert ActionStep(action="text_input", params={"text": "hello"}).validate() is True
+    assert ActionStep(action="text_input", params={"text": ""}).validate() is False
+    assert ActionStep(action="text_input", params={}).validate() is False
+    assert ActionStep(action="text_input", params={"text": 42}).validate() is False
+
+
+def test_mouse_drag_validation():
+    valid = {"button": "left", "x1": 10, "y1": 20, "x2": 30, "y2": 40, "duration_ms": 200}
+    assert ActionStep(action="mouse_drag", params=valid).validate() is True
+    bad_button = dict(valid, button="purple")
+    assert ActionStep(action="mouse_drag", params=bad_button).validate() is False
+    bad_dur = dict(valid, duration_ms=-1)
+    assert ActionStep(action="mouse_drag", params=bad_dur).validate() is False
+    missing = {k: v for k, v in valid.items() if k != "x2"}
+    assert ActionStep(action="mouse_drag", params=missing).validate() is False
+
+
+def test_profile_run_history_defaults_and_roundtrip():
+    p = Profile.create_new(name="N", hotkey=None, steps=[])
+    assert p.run_count == 0
+    assert p.last_run_at is None
+    p.run_count = 5
+    p.last_run_at = 1700000000.0
+    p2 = Profile.from_dict(p.to_dict())
+    assert p2.run_count == 5
+    assert p2.last_run_at == 1700000000.0
+
+
+def test_profile_from_dict_legacy_without_run_history():
+    legacy = {"id": "x", "name": "L", "hotkey": None, "steps": []}
+    p = Profile.from_dict(legacy)
+    assert p.run_count == 0
+    assert p.last_run_at is None
+
+
+def test_profile_from_dict_coerces_bad_run_history():
+    bad = {
+        "id": "x", "name": "L", "hotkey": None, "steps": [],
+        "run_count": -3, "last_run_at": "not-a-number",
+    }
+    p = Profile.from_dict(bad)
+    assert p.run_count == 0
+    assert p.last_run_at is None
 
 
 def test_required_params_defined():
@@ -188,3 +234,72 @@ def test_profile_from_dict_without_repeat_defaults_to_1():
     d = {"id": "abc", "name": "OldProfile", "hotkey": None, "steps": []}
     p = Profile.from_dict(d)
     assert p.repeat == 1
+
+
+# --- Defensive deserialisation ---
+
+import pytest
+
+
+def test_action_step_from_dict_rejects_non_dict():
+    with pytest.raises(ValueError):
+        ActionStep.from_dict("nope")  # type: ignore[arg-type]
+
+
+def test_action_step_from_dict_rejects_missing_action():
+    with pytest.raises(ValueError, match="action"):
+        ActionStep.from_dict({"params": {}})
+
+
+def test_action_step_from_dict_rejects_non_dict_params():
+    with pytest.raises(ValueError, match="params"):
+        ActionStep.from_dict({"action": "move", "params": "x=1"})
+
+
+def test_action_step_from_dict_defaults_missing_params_to_empty():
+    step = ActionStep.from_dict({"action": "wait"})
+    assert step.params == {}
+
+
+def test_profile_from_dict_rejects_missing_id_or_name():
+    with pytest.raises(ValueError):
+        Profile.from_dict({"name": "X", "steps": []})
+    with pytest.raises(ValueError):
+        Profile.from_dict({"id": "x", "steps": []})
+
+
+def test_profile_from_dict_rejects_non_list_steps():
+    with pytest.raises(ValueError, match="steps"):
+        Profile.from_dict({"id": "a", "name": "B", "steps": "wait"})
+
+
+def test_profile_from_dict_rejects_non_string_hotkey():
+    with pytest.raises(ValueError, match="hotkey"):
+        Profile.from_dict({"id": "a", "name": "B", "steps": [], "hotkey": 42})
+
+
+def test_profile_has_blocking_lock_before_end_true():
+    steps = [
+        ActionStep(action="lock", params={"x": 0, "y": 0, "duration_ms": 0}),
+        ActionStep(action="wait", params={"ms": 10}),
+    ]
+    p = Profile(id="x", name="X", hotkey=None, steps=steps)
+    assert p.has_blocking_lock_before_end() is True
+
+
+def test_profile_has_blocking_lock_before_end_false_when_last():
+    steps = [
+        ActionStep(action="wait", params={"ms": 10}),
+        ActionStep(action="lock", params={"x": 0, "y": 0, "duration_ms": 0}),
+    ]
+    p = Profile(id="x", name="X", hotkey=None, steps=steps)
+    assert p.has_blocking_lock_before_end() is False
+
+
+def test_profile_has_blocking_lock_before_end_false_when_timed():
+    steps = [
+        ActionStep(action="lock", params={"x": 0, "y": 0, "duration_ms": 100}),
+        ActionStep(action="wait", params={"ms": 10}),
+    ]
+    p = Profile(id="x", name="X", hotkey=None, steps=steps)
+    assert p.has_blocking_lock_before_end() is False

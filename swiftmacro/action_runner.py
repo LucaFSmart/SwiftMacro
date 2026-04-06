@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import random
 import threading
+from typing import Callable
 
 import keyboard
 
 from swiftmacro import cursor
+from swiftmacro.constants import RUNNER_STOP_JOIN_TIMEOUT
 from swiftmacro.log import get_logger
 from swiftmacro.models import ActionStep, Profile
 from swiftmacro.state import AppState
@@ -21,8 +23,21 @@ class ActionRunner:
         self._running = False
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._on_run_complete: Callable[[Profile], None] | None = None
+
+    def set_on_run_complete(self, callback: Callable[[Profile], None] | None) -> None:
+        """Register a callback fired once after each chain run finishes.
+
+        Used by ``ProfileManager`` to update ``run_count`` and
+        ``last_run_at``. The callback runs on the worker thread, so it must
+        be thread-safe; ``ProfileManager`` already serialises through
+        ``ProfileStore``'s lock.
+        """
+        self._on_run_complete = callback
 
     def run_profile(self, profile: Profile) -> None:
+        # Thread creation must happen inside the lock so a concurrent stop()
+        # cannot observe a half-initialised state (running=True, thread=None).
         with self._lock:
             if self._running:
                 self._state.set_status_message("Already running")
@@ -30,24 +45,36 @@ class ActionRunner:
             self._running = True
             self._stop_event.clear()
             self._state.set_runner_busy(True)
-
-        self._thread = threading.Thread(
-            target=self._execute_chain,
-            args=(profile,),
-            name="ActionRunner",
-            daemon=True,
-        )
-        self._thread.start()
+            self._thread = threading.Thread(
+                target=self._execute_chain,
+                args=(profile,),
+                name="ActionRunner",
+                daemon=True,
+            )
+            self._thread.start()
 
     def stop(self) -> None:
-        was_running = self.is_running()
+        with self._lock:
+            was_running = self._running
+            t = self._thread
+        if not was_running:
+            return
         self._stop_event.set()
-        t = self._thread
-        if t is not None:
-            t.join(timeout=2.0)
-        self._thread = None
-        if was_running and not self.is_running():
-            self._state.set_status_message("Stopped")
+        if t is not None and t is not threading.current_thread():
+            t.join(timeout=RUNNER_STOP_JOIN_TIMEOUT)
+            if t.is_alive():
+                _log.warning(
+                    "ActionRunner thread did not exit within %.1fs — leaving zombie reference",
+                    RUNNER_STOP_JOIN_TIMEOUT,
+                )
+                # Do NOT clear self._thread — keep the reference so we can
+                # observe it on the next stop() and refuse new runs while alive.
+                return
+        with self._lock:
+            self._thread = None
+        # is_running() is now safely False because the worker's finally block
+        # has executed before t.join() returned.
+        self._state.set_status_message("Stopped")
 
     def is_running(self) -> bool:
         with self._lock:
@@ -81,6 +108,12 @@ class ActionRunner:
             self._state.set_runner_busy(False)
             with self._lock:
                 self._running = False
+            cb = self._on_run_complete
+            if cb is not None:
+                try:
+                    cb(profile)
+                except Exception as exc:
+                    _log.warning("on_run_complete callback raised: %s", exc)
 
     def _run_pass(self, profile: Profile) -> bool:
         """Run all steps once. Returns True if any step had an error."""
@@ -89,7 +122,8 @@ class ActionRunner:
         for i, step in enumerate(profile.steps):
             if self._stop_event.is_set():
                 return had_error
-            self._state.set_chain_progress(i, n)
+            # Progress is 1-indexed: when step 1 starts, the bar shows 1/n.
+            self._state.set_chain_progress(i + 1, n)
             if not step.validate():
                 self._state.set_status_message(f"Step {i+1}/{n}: invalid params")
                 had_error = True
@@ -97,8 +131,6 @@ class ActionRunner:
             self._state.set_status_message(f"Step {i+1}/{n}: {step.action}")
             if not self._execute_step(step):
                 had_error = True
-        if not self._stop_event.is_set() and not had_error:
-            self._state.set_chain_progress(n, n)  # 100% — brief, reset by set_runner_busy(False)
         return had_error
 
     def _execute_step(self, step: ActionStep) -> bool:
@@ -148,6 +180,21 @@ class ActionRunner:
             elif step.action == "random_delay":
                 ms = random.randint(p["min_ms"], p["max_ms"])
                 self._stop_event.wait(timeout=ms / 1000.0)
+
+            elif step.action == "text_input":
+                # keyboard.write handles both ASCII and unicode via clipboard
+                # fallback. We trust the library here — exceptions surface in
+                # the outer try/except as a "Step failed" status.
+                keyboard.write(p["text"])
+
+            elif step.action == "mouse_drag":
+                cursor.drag(
+                    p["button"],
+                    p["x1"], p["y1"],
+                    p["x2"], p["y2"],
+                    p["duration_ms"],
+                    self._stop_event,
+                )
 
             return True
         except Exception as exc:

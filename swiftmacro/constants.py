@@ -16,6 +16,16 @@ LOCK_INTERVAL_MS = 15
 UI_POLL_MS = 200
 ICON_SIZE = 64
 
+# Thread join timeouts (seconds)
+RUNNER_STOP_JOIN_TIMEOUT = 5.0
+TRAY_STOP_JOIN_TIMEOUT = 2.0
+
+# Window geometry (width, height)
+MAIN_WINDOW_SIZE = (980, 720)
+MAIN_WINDOW_MIN_SIZE = (920, 680)
+STEP_BUILDER_SIZE = (900, 760)
+STEP_BUILDER_MIN_SIZE = (860, 720)
+
 # Limits
 MAX_PROFILES = 20
 MAX_STEPS = 100
@@ -39,8 +49,26 @@ STEP_ICONS: dict[str, str] = {
     "wait":         "⏸",
     "lock":         "⊕",
     "scroll":       "↕",
-    "hold_key":     "⌨",
+    "hold_key":     "⎈",
     "random_delay": "~",
+    "text_input":   "✎",
+    "mouse_drag":   "⇲",
+}
+
+# Per-action category for color-coded preview rendering.
+# Keeping this in a separate map keeps STEP_ICONS purely visual.
+STEP_CATEGORIES: dict[str, str] = {
+    "move":         "mouse",
+    "click":        "mouse",
+    "repeat_click": "mouse",
+    "scroll":       "mouse",
+    "lock":         "mouse",
+    "mouse_drag":   "mouse",
+    "keypress":     "keyboard",
+    "hold_key":     "keyboard",
+    "text_input":   "keyboard",
+    "wait":         "timing",
+    "random_delay": "timing",
 }
 
 # File paths (expanded at runtime via os.path.expanduser)

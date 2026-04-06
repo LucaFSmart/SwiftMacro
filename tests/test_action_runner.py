@@ -300,8 +300,46 @@ def test_progress_reported_per_step():
     runner.run_profile(profile)
     time.sleep(0.3)
 
-    # Should have been called with (0,3), (1,3), (2,3), (3,3) in order
-    assert (0, 3) in calls
+    # Progress is 1-indexed: when step 1 starts, the bar shows 1/n.
+    # Should have been called with (1,3), (2,3), (3,3) in order.
     assert (1, 3) in calls
     assert (2, 3) in calls
     assert (3, 3) in calls
+    assert (0, 3) not in calls
+
+
+def test_stop_sets_stopped_status_only_after_thread_exit():
+    """After stop() returns, runner must be fully stopped and status set."""
+    state = make_state()
+    runner = ActionRunner(state)
+    steps = [ActionStep(action="wait", params={"ms": 5000})]
+    profile = make_profile(steps)
+    runner.run_profile(profile)
+    time.sleep(0.05)
+    assert runner.is_running()
+    runner.stop()
+    # After stop() returns, the runner thread is guaranteed dead.
+    assert not runner.is_running()
+    assert state.get_status_message() == "Stopped"
+
+
+def test_stop_when_not_running_is_a_noop():
+    state = make_state()
+    runner = ActionRunner(state)
+    state.set_status_message("Idle")
+    runner.stop()
+    # Status untouched because nothing was running.
+    assert state.get_status_message() == "Idle"
+
+
+def test_run_profile_after_stop_works_again():
+    state = make_state()
+    runner = ActionRunner(state)
+    profile = make_profile([ActionStep(action="wait", params={"ms": 5000})])
+    runner.run_profile(profile)
+    time.sleep(0.05)
+    runner.stop()
+    # Second run must be allowed once the first is fully stopped.
+    runner.run_profile(make_profile([ActionStep(action="wait", params={"ms": 10})]))
+    time.sleep(0.2)
+    assert not runner.is_running()

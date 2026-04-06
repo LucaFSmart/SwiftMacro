@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ctypes
+import time
 from threading import Event
 
 # mouse_event flags
@@ -73,6 +74,60 @@ def repeat_click(
 MOUSEEVENTF_WHEEL = 0x0800
 MOUSEEVENTF_HWHEEL = 0x1000
 WHEEL_DELTA = 120
+
+
+def drag(
+    button: str,
+    x1: int,
+    y1: int,
+    x2: int,
+    y2: int,
+    duration_ms: int,
+    stop_event: Event,
+) -> bool:
+    """Press at (x1, y1), interpolate to (x2, y2), then release.
+
+    ``duration_ms`` controls how long the move takes; 0 means "snap" — only
+    a single SetCursorPos to the destination is issued. The interpolation is
+    interrupted promptly when ``stop_event`` is set, and the button is always
+    released so we never leave the user with a stuck mouse button.
+    """
+    flags = _BUTTON_FLAGS.get(button)
+    if flags is None:
+        return False
+    try:
+        ctypes.windll.user32.SetCursorPos(x1, y1)
+        ctypes.windll.user32.mouse_event(flags[0], 0, 0, 0, 0)
+        try:
+            if duration_ms <= 0:
+                ctypes.windll.user32.SetCursorPos(x2, y2)
+            else:
+                # ~120 Hz interpolation, capped to avoid wasting cycles for
+                # very short drags. The dx/dy fixed-step approach is enough
+                # for typical drag-and-drop targets in games and apps.
+                steps = max(2, min(int(duration_ms / 8), 240))
+                step_sleep = (duration_ms / 1000.0) / steps
+                for i in range(1, steps + 1):
+                    if stop_event.is_set():
+                        break
+                    progress = i / steps
+                    cur_x = int(x1 + (x2 - x1) * progress)
+                    cur_y = int(y1 + (y2 - y1) * progress)
+                    ctypes.windll.user32.SetCursorPos(cur_x, cur_y)
+                    if step_sleep > 0:
+                        time.sleep(step_sleep)
+                # Always finish exactly on target.
+                ctypes.windll.user32.SetCursorPos(x2, y2)
+        finally:
+            ctypes.windll.user32.mouse_event(flags[1], 0, 0, 0, 0)
+        return True
+    except Exception:
+        # Best-effort: try to release the button so we never leave it stuck.
+        try:
+            ctypes.windll.user32.mouse_event(flags[1], 0, 0, 0, 0)
+        except Exception:
+            pass
+        return False
 
 
 def scroll(x: int, y: int, direction: str, amount: int) -> bool:
