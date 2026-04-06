@@ -1,6 +1,6 @@
 # SwiftMacro
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)]()
+[![Version](https://img.shields.io/badge/version-1.1.1-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-yellow)]()
@@ -10,7 +10,7 @@ A Windows desktop utility for creating and running reusable mouse and keyboard a
 ## Features
 
 - **Profile-based automation** — Create up to 20 profiles, each with up to 100 action steps
-- **9 action types** — `move`, `click`, `repeat_click`, `keypress`, `wait`, `lock`, `scroll`, `hold_key`, `random_delay`
+- **11 action types** — `move`, `click`, `repeat_click`, `keypress`, `wait`, `lock`, `scroll`, `hold_key`, `random_delay`, `text_input`, `mouse_drag`
 - **Global hotkeys** — Trigger profiles from anywhere, with conflict detection
 - **Profile repeat/loop** — Run a profile chain multiple times or indefinitely
 - **Cursor lock** — Pin the cursor to a position temporarily or permanently
