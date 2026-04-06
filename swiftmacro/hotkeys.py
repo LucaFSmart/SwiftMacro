@@ -8,20 +8,26 @@ from swiftmacro.constants import (
     HOTKEY_STOP_CHAIN,
     SYSTEM_HOTKEYS,
 )
+from swiftmacro.shutdown import ShutdownCoordinator
 from swiftmacro.state import AppState
 
 _log = get_logger("hotkeys")
 
-# Mutable reference so HotkeyManager can call shutdown() without circular import
-_shutdown_ref: list = [lambda: None]
-
 
 class HotkeyManager:
-    def __init__(self, state: AppState, root, action_runner=None, profile_store=None) -> None:
+    def __init__(
+        self,
+        state: AppState,
+        root,
+        action_runner=None,
+        profile_store=None,
+        shutdown: ShutdownCoordinator | None = None,
+    ) -> None:
         self._state = state
         self._root = root
         self._action_runner = action_runner
         self._profile_store = profile_store
+        self._shutdown = shutdown
         self._registered: list[str] = []
         self._profile_hotkeys: list[str] = []
         self._system_errors: list[str] = []
@@ -105,14 +111,13 @@ class HotkeyManager:
                 self._profile_errors.append(f"{profile.hotkey}: {exc}")
         self._sync_errors()
 
-    def start(self):
-        """No-op hook bootstrap kept for compatibility with the app wiring."""
-        return None
-
     # --- callbacks ---
 
     def _on_exit(self) -> None:
-        self._root.after(0, _shutdown_ref[0])
+        if self._shutdown is not None:
+            self._root.after(0, self._shutdown.trigger)
+        else:
+            _log.warning("Exit hotkey fired but no ShutdownCoordinator was wired")
 
     def _on_run(self) -> None:
         if self._action_runner is None or self._profile_store is None:

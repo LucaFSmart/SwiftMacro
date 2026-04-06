@@ -7,10 +7,12 @@ import typing
 from swiftmacro.action_runner import ActionRunner
 from swiftmacro.constants import APP_ID, APP_MUTEX_NAME
 from swiftmacro.dpi import init_dpi_awareness
-from swiftmacro.hotkeys import HotkeyManager, _shutdown_ref
+from swiftmacro.hotkeys import HotkeyManager
 from swiftmacro.icon import apply_window_icon, set_windows_app_id
 from swiftmacro.lock_loop import LockLoop
+from swiftmacro.profile_manager import ProfileManager
 from swiftmacro.profile_store import ProfileStore
+from swiftmacro.shutdown import ShutdownCoordinator
 from swiftmacro.single_instance import SingleInstanceGuard, acquire_single_instance
 from swiftmacro.state import AppState, make_state
 from swiftmacro.tray import TrayManager
@@ -99,15 +101,49 @@ def main() -> None:
     state = make_state()
     root = tk.Tk()
     apply_window_icon(root)
-    profile_store = ProfileStore()  # migration runs here in Task 6
+    profile_store = ProfileStore()
     action_runner = ActionRunner(state)
+    shutdown_coordinator = ShutdownCoordinator()
 
-    tray_mgr = TrayManager(state, root)
+    # Build the tray manager (but DON'T start it yet) so we can wire its
+    # shutdown callback before the icon thread is spawned. This eliminates
+    # the brief startup window where a tray "Quit" click would arrive at a
+    # not-yet-registered coordinator and silently no-op.
+    tray_mgr = TrayManager(state, root, shutdown_fn=shutdown_coordinator.trigger)
+
+    hotkey_mgr = HotkeyManager(
+        state, root, action_runner, profile_store, shutdown=shutdown_coordinator
+    )
+    profile_manager = ProfileManager(profile_store, hotkey_mgr)
+    action_runner.set_on_run_complete(
+        lambda profile: profile_manager.record_run(profile.id)
+    )
+
+    lock_loop = LockLoop(state)
+
+    # Build the shutdown callback BEFORE starting any background services so
+    # any of them firing immediately (tray, hotkey, hotkey thread, etc.) is
+    # routed cleanly through the coordinator.
+    def _build_shutdown(tray_active: bool):
+        return make_shutdown(
+            state,
+            hotkey_mgr,
+            action_runner,
+            lock_loop,
+            tray_mgr if tray_active else None,
+            instance_guard,
+            root,
+        )
+
+    # Provisional callback (no tray yet) — overwritten once we know tray state.
+    shutdown_coordinator.set_callback(_build_shutdown(tray_active=False))
+
     tray_available = tray_mgr.start()
     if not tray_available:
         state.set_status_message("Tray unavailable")
+    else:
+        shutdown_coordinator.set_callback(_build_shutdown(tray_active=True))
 
-    hotkey_mgr = HotkeyManager(state, root, action_runner, profile_store)
     MainWindow(
         root,
         state,
@@ -115,31 +151,20 @@ def main() -> None:
         profile_store=profile_store,
         hotkey_mgr=hotkey_mgr,
         action_runner=action_runner,
+        profile_manager=profile_manager,
+        shutdown=shutdown_coordinator,
     )
 
     threading.Thread(target=_check_update_bg, args=(state,), daemon=True).start()
 
-    lock_loop = LockLoop(state)
     lock_loop.start()
-
-    shutdown_fn = make_shutdown(
-        state,
-        hotkey_mgr,
-        action_runner,
-        lock_loop,
-        tray_mgr if tray_available else None,
-        instance_guard,
-        root,
-    )
-    _shutdown_ref[0] = shutdown_fn
 
     hotkey_mgr.register_all()
     hotkey_mgr.refresh_profile_hotkeys(profile_store.load())
-    hotkey_mgr.start()
 
     log.info("Startup complete")
     try:
         root.mainloop()
     finally:
-        shutdown_fn()
+        shutdown_coordinator.trigger()
         log.info("SwiftMacro shut down")
