@@ -1,14 +1,28 @@
-"""Main application window with profile management."""
+"""Main application window — orchestrates section panels and the poll loop.
+
+This module owns very little: it wires together :class:`HeroSection`,
+:class:`ProfilesPanel` and :class:`Sidebar`, routes user commands to the
+:class:`ProfileManager`, and forwards periodic state into the sections via
+``_poll()``. All widget construction lives in the section modules.
+"""
 from __future__ import annotations
 
 import tkinter as tk
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
 
-from swiftmacro.constants import APP_NAME, MAX_PROFILES, STEP_ICONS, UI_POLL_MS
-from swiftmacro.hotkeys import _shutdown_ref
+from swiftmacro.constants import (
+    APP_NAME,
+    MAIN_WINDOW_MIN_SIZE,
+    MAIN_WINDOW_SIZE,
+    MAX_PROFILES,
+    UI_POLL_MS,
+)
+from swiftmacro.profile_manager import ProfileManager
+from swiftmacro.shutdown import ShutdownCoordinator
 from swiftmacro.state import AppState
-from swiftmacro.ui.theme import COLORS, HEADING_FONT, configure_theme, make_chip
+from swiftmacro.ui.sections import HeroSection, ProfilesPanel, Sidebar
+from swiftmacro.ui.theme import COLORS, configure_theme
 
 
 class MainWindow:
@@ -20,6 +34,8 @@ class MainWindow:
         profile_store=None,
         hotkey_mgr=None,
         action_runner=None,
+        profile_manager: ProfileManager | None = None,
+        shutdown: ShutdownCoordinator | None = None,
     ) -> None:
         self._root = root
         self._state = state
@@ -27,400 +43,162 @@ class MainWindow:
         self._hotkey_mgr = hotkey_mgr
         self._action_runner = action_runner
         self._tray_available = tray_available
+        self._shutdown = shutdown
+
+        # If no manager was passed (legacy/test path), build one on the fly so
+        # the rest of the UI only ever talks to the manager. The manager is
+        # tolerant of profile_store=None — list() returns [] in that case.
+        if profile_manager is not None:
+            self._profile_manager = profile_manager
+        elif profile_store is not None:
+            self._profile_manager = ProfileManager(profile_store, hotkey_mgr)
+        else:
+            self._profile_manager = None
+
         self._style = configure_theme(root)
 
         root.title(f"{APP_NAME} Control Center")
-        root.geometry("980x720")
-        root.minsize(920, 680)
+        root.geometry(f"{MAIN_WINDOW_SIZE[0]}x{MAIN_WINDOW_SIZE[1]}")
+        root.minsize(*MAIN_WINDOW_MIN_SIZE)
         root.configure(bg=COLORS["bg"])
 
         self._build_layout()
+        self._wire_backwards_compat_attrs()
+        self._bind_shortcuts()
 
         if tray_available:
             root.protocol("WM_DELETE_WINDOW", root.withdraw)
         else:
-            root.protocol("WM_DELETE_WINDOW", lambda: _shutdown_ref[0]())
+            root.protocol("WM_DELETE_WINDOW", self._on_close_no_tray)
 
         self._refresh_profile_list()
         self._update_action_buttons()
         root.after(UI_POLL_MS, self._poll)
 
+    # --- layout ------------------------------------------------------------
     def _build_layout(self) -> None:
-        shell = ttk.Frame(self._root, style="App.TFrame", padding=(26, 22, 26, 22))
+        shell = ttk.Frame(self._root, style="App.TFrame", padding=(28, 24, 28, 24))
         shell.pack(fill="both", expand=True)
         shell.columnconfigure(0, weight=3)
         shell.columnconfigure(1, weight=2)
         shell.rowconfigure(1, weight=1)
 
-        self._build_hero(shell)
-        self._build_profiles_panel(shell)
-        self._build_sidebar(shell)
+        self._hero = HeroSection(
+            shell,
+            state=self._state,
+            tray_available=self._tray_available,
+            on_open_update=self._open_update_url,
+        )
+        self._hero.frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 20))
 
-    def _build_hero(self, parent: ttk.Frame) -> None:
-        hero = ttk.Frame(parent, style="App.TFrame")
-        hero.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 18))
-        hero.columnconfigure(0, weight=3)
-        hero.columnconfigure(1, weight=2)
+        self._profiles_panel = ProfilesPanel(
+            shell,
+            on_add=self._cmd_add,
+            on_edit=self._cmd_edit,
+            on_duplicate=self._cmd_duplicate,
+            on_delete=self._cmd_delete,
+            on_run=self._cmd_run,
+            on_stop=self._cmd_stop_chain,
+            on_select=self._on_profile_select,
+        )
+        self._profiles_panel.frame.grid(row=1, column=0, sticky="nsew", padx=(0, 14))
 
-        left = ttk.Frame(hero, style="App.TFrame")
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+        self._sidebar = Sidebar(
+            shell,
+            state=self._state,
+            tray_available=self._tray_available,
+            on_import=self._cmd_import,
+            on_export=self._cmd_export,
+        )
+        self._sidebar.frame.grid(row=1, column=1, sticky="nsew")
 
-        ttk.Label(left, text=APP_NAME, style="HeroTitle.TLabel").pack(anchor="w")
-        ttk.Label(
-            left,
-            text=(
-                "Profile-first desktop automation for gamers and power users — build reusable click, keypress, wait and lock flows."
-            ),
-            style="HeroBody.TLabel",
-            wraplength=520,
-            justify="left",
-        ).pack(anchor="w", pady=(6, 14))
+    def _wire_backwards_compat_attrs(self) -> None:
+        """Expose section widgets under their legacy names for tests/callers.
 
-        badge_row = ttk.Frame(left, style="App.TFrame")
-        badge_row.pack(anchor="w")
-        self._profile_count_label = ttk.Label(badge_row, text="0 profiles", style="Badge.TLabel")
-        self._profile_count_label.pack(side="left")
-        ttk.Label(badge_row, text="Desktop automation hub", style="HeroBody.TLabel").pack(
-            side="left", padx=(12, 0)
-        )
+        Older tests reach into ``MainWindow`` for things like ``_add_btn`` and
+        ``_profile_tree``. Keep those attribute names alive without forcing
+        section classes to use the underscore-prefixed style.
+        """
+        # Hero
+        self._profile_count_label = self._hero.profile_count_label
+        self._runner_chip = self._hero.runner_chip
+        self._tray_chip = self._hero.tray_chip
+        self._update_chip = self._hero.update_chip
+        self._pos_label = self._hero.pos_label
+        self._lock_label = self._hero.lock_label
 
-        chip_row = tk.Frame(left, bg=COLORS["bg"])
-        chip_row.pack(anchor="w", pady=(14, 0))
-        self._runner_chip = make_chip(
-            chip_row,
-            text="Idle",
-            bg=COLORS["chip_idle_bg"],
-            fg=COLORS["chip_idle_fg"],
-        )
-        self._runner_chip.pack(side="left")
-        self._tray_chip = make_chip(
-            chip_row,
-            text="Tray Ready" if self._tray_available else "Tray Offline",
-            bg=COLORS["chip_online_bg"] if self._tray_available else COLORS["chip_offline_bg"],
-            fg=COLORS["success"] if self._tray_available else COLORS["warning"],
-        )
-        self._tray_chip.pack(side="left", padx=(10, 0))
-        self._update_chip = make_chip(
-            chip_row,
-            text="↑ Update available",
-            bg=COLORS["chip_update_bg"],
-            fg=COLORS["chip_update_fg"],
-        )
-        self._update_chip.bind(
-            "<Button-1>",
-            self._open_update_url,
-        )
-        self._update_chip.config(cursor="hand2")
-        # Note: _update_chip is intentionally NOT packed here — _poll() controls visibility
+        # Profiles panel
+        self._status_label = self._profiles_panel.status_label
+        self._progress_bar = self._profiles_panel.progress_bar
+        self._list_shell = self._profiles_panel.list_shell
+        self._empty_state_frame = self._profiles_panel.empty_state_frame
+        self._profile_tree = self._profiles_panel.profile_tree
+        self._add_btn = self._profiles_panel.add_btn
+        self._edit_btn = self._profiles_panel.edit_btn
+        self._duplicate_btn = self._profiles_panel.duplicate_btn
+        self._delete_btn = self._profiles_panel.delete_btn
+        self._run_btn = self._profiles_panel.run_btn
+        self._stop_btn = self._profiles_panel.stop_btn
 
-        status_card = ttk.Frame(hero, style="AltCard.TFrame", padding=(18, 18, 18, 18))
-        status_card.grid(row=0, column=1, sticky="nsew")
-        status_card.columnconfigure(0, weight=1)
-        ttk.Label(status_card, text="Automation Status", style="SectionTitle.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(
-            status_card,
-            text="A quick read on what the app is doing right now and which profile is in focus.",
-            style="StatusBody.TLabel",
-            wraplength=280,
-            justify="left",
-        ).grid(row=1, column=0, sticky="w", pady=(4, 16))
+        # Sidebar
+        self._selected_profile_name = self._sidebar.selected_profile_name
+        self._selected_profile_meta = self._sidebar.selected_profile_meta
+        self._selected_profile_steps = self._sidebar.selected_profile_steps
+        self._import_btn = self._sidebar.import_btn
+        self._export_btn = self._sidebar.export_btn
+        self._error_frame = self._sidebar.error_frame
+        self._error_label = self._sidebar.error_label
+        self._footer_label = self._sidebar.footer_label
 
-        stats = ttk.Frame(status_card, style="AltCard.TFrame")
-        stats.grid(row=2, column=0, sticky="ew")
-        stats.columnconfigure(0, weight=1)
-        stats.columnconfigure(1, weight=1)
+    # --- shortcuts ---------------------------------------------------------
+    def _bind_shortcuts(self) -> None:
+        """Wire UI-only keyboard shortcuts (in-window, not global hotkeys).
 
-        pos_card = tk.Frame(stats, bg=COLORS["surface_alt"], highlightthickness=0)
-        pos_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        tk.Label(
-            pos_card,
-            text="Current Focus",
-            bg=COLORS["surface_alt"],
-            fg=COLORS["muted"],
-            font=("Segoe UI", 9),
-            anchor="w",
-        ).pack(fill="x")
-        self._pos_label = tk.Label(
-            pos_card,
-            text="No profile",
-            bg=COLORS["surface_alt"],
-            fg=COLORS["text"],
-            font=(HEADING_FONT, 16),
-            anchor="w",
-        )
-        self._pos_label.pack(fill="x", pady=(4, 0))
+        Skipped when focus is inside an Entry/Combobox so typed text isn't
+        eaten by Delete/Enter.
+        """
+        bindings: dict[str, callable] = {
+            "<Control-n>": self._cmd_add,
+            "<Control-N>": self._cmd_add,
+            "<Control-d>": self._cmd_duplicate,
+            "<Control-D>": self._cmd_duplicate,
+            "<F2>": self._cmd_edit,
+            "<Return>": self._cmd_edit,
+            "<Delete>": self._cmd_delete,
+            "<F5>": self._cmd_run,
+            "<Escape>": self._cmd_stop_chain,
+        }
+        for sequence, handler in bindings.items():
+            self._root.bind(sequence, self._make_shortcut_handler(handler))
 
-        lock_card = tk.Frame(stats, bg=COLORS["surface_alt"], highlightthickness=0)
-        lock_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
-        tk.Label(
-            lock_card,
-            text="Execution",
-            bg=COLORS["surface_alt"],
-            fg=COLORS["muted"],
-            font=("Segoe UI", 9),
-            anchor="w",
-        ).pack(fill="x")
-        self._lock_label = tk.Label(
-            lock_card,
-            text="Idle",
-            bg=COLORS["surface_alt"],
-            fg=COLORS["muted"],
-            font=(HEADING_FONT, 16),
-            anchor="w",
-        )
-        self._lock_label.pack(fill="x", pady=(4, 0))
+    def _make_shortcut_handler(self, handler):
+        def _handle(event):
+            widget = event.widget
+            try:
+                cls = widget.winfo_class()
+            except Exception:
+                cls = ""
+            if cls in {"TEntry", "Entry", "TCombobox", "Text"}:
+                return None
+            handler()
+            return "break"
+        return _handle
 
-    def _build_profiles_panel(self, parent: ttk.Frame) -> None:
-        panel = ttk.Frame(parent, style="Card.TFrame", padding=(18, 18, 18, 18))
-        panel.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
-        panel.columnconfigure(0, weight=1)
-        panel.rowconfigure(3, weight=1)
+    # --- helpers -----------------------------------------------------------
+    def _on_close_no_tray(self) -> None:
+        """Window-close handler when the tray icon is unavailable.
 
-        header = ttk.Frame(panel, style="Card.TFrame")
-        header.grid(row=0, column=0, sticky="ew")
-        header.columnconfigure(0, weight=1)
-        ttk.Label(header, text="Profiles", style="SectionTitle.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(
-            header,
-            text="Create reusable automation chains and run only the profile you actually need.",
-            style="Muted.TLabel",
-            wraplength=500,
-            justify="left",
-        ).grid(row=1, column=0, sticky="w", pady=(4, 0))
-
-        self._status_label = tk.Label(
-            panel,
-            text="",
-            bg=COLORS["surface"],
-            fg=COLORS["accent"],
-            font=("Segoe UI", 10, "bold"),
-            anchor="w",
-            wraplength=560,
-            justify="left",
-        )
-        self._status_label.grid(row=1, column=0, sticky="ew", pady=(12, 12))
-
-        self._progress_bar = ttk.Progressbar(
-            panel,
-            orient="horizontal",
-            mode="determinate",
-            style="Teal.Horizontal.TProgressbar",
-            maximum=100,
-            value=0,
-        )
-        # Do NOT grid here — _poll() shows/hides it
-
-        list_shell = tk.Frame(panel, bg=COLORS["entry_bg"], highlightbackground=COLORS["border"], highlightthickness=1)
-        self._list_shell = list_shell
-        list_shell.grid(row=3, column=0, sticky="nsew")
-        list_shell.grid_columnconfigure(0, weight=1)
-        list_shell.grid_rowconfigure(0, weight=1)
-
-        self._empty_state_frame = tk.Frame(
-            panel,
-            bg=COLORS["entry_bg"],
-            highlightbackground=COLORS["border"],
-            highlightthickness=1,
-        )
-        # Same grid slot as list_shell (row 3) — starts NOT gridded, _poll() controls visibility
-        inner = tk.Frame(self._empty_state_frame, bg=COLORS["entry_bg"])
-        inner.place(relx=0.5, rely=0.5, anchor="center")
-        tk.Label(
-            inner, text="⚡", bg=COLORS["entry_bg"], fg=COLORS["accent"],
-            font=("Segoe UI", 28),
-        ).pack()
-        ttk.Label(inner, text="No profiles yet", style="SectionTitle.TLabel").pack(pady=(6, 0))
-        ttk.Label(
-            inner,
-            text="Build a reusable action chain to get started",
-            style="Muted.TLabel",
-        ).pack(pady=(4, 12))
-        ttk.Button(
-            inner, text="＋ Add your first profile",
-            style="Primary.TButton", command=self._cmd_add,
-        ).pack()
-
-        self._profile_tree = ttk.Treeview(
-            list_shell,
-            columns=("name", "hotkey", "steps"),
-            show="headings",
-            selectmode="browse",
-            style="App.Treeview",
-        )
-        self._profile_tree.heading("name",   text="Profile", anchor="w")
-        self._profile_tree.heading("hotkey", text="Hotkey",  anchor="w")
-        self._profile_tree.heading("steps",  text="Steps",   anchor="center")
-        self._profile_tree.column("name",   stretch=True,  minwidth=150, anchor="w")
-        self._profile_tree.column("hotkey", stretch=False, width=130,    anchor="w")
-        self._profile_tree.column("steps",  stretch=False, width=60,     anchor="center")
-        self._profile_tree.grid(row=0, column=0, sticky="nsew")
-        self._profile_tree.bind("<<TreeviewSelect>>", self._on_profile_select)
-
-        profile_scroll = ttk.Scrollbar(
-            list_shell, orient="vertical", command=self._profile_tree.yview,
-            style="App.Vertical.TScrollbar",
-        )
-        profile_scroll.grid(row=0, column=1, sticky="ns")
-        self._profile_tree.configure(yscrollcommand=profile_scroll.set)
-
-        profile_btn_frame = ttk.Frame(panel, style="Card.TFrame")
-        profile_btn_frame.grid(row=4, column=0, sticky="ew", pady=(14, 0))
-        for column in range(6):
-            profile_btn_frame.columnconfigure(column, weight=1)
-
-        self._add_btn = ttk.Button(
-            profile_btn_frame, text="＋  Add", style="Primary.TButton", command=self._cmd_add
-        )
-        self._add_btn.grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        self._edit_btn = ttk.Button(
-            profile_btn_frame, text="✎  Edit", style="Secondary.TButton", command=self._cmd_edit
-        )
-        self._edit_btn.grid(row=0, column=1, sticky="ew", padx=6)
-        self._duplicate_btn = ttk.Button(
-            profile_btn_frame,
-            text="⊞  Copy",
-            style="Secondary.TButton",
-            command=self._cmd_duplicate,
-        )
-        self._duplicate_btn.grid(row=0, column=2, sticky="ew", padx=6)
-        self._delete_btn = ttk.Button(
-            profile_btn_frame, text="✕  Delete", style="Danger.TButton", command=self._cmd_delete
-        )
-        self._delete_btn.grid(row=0, column=3, sticky="ew", padx=6)
-        self._run_btn = ttk.Button(
-            profile_btn_frame, text="▶  Run", style="Primary.TButton", command=self._cmd_run
-        )
-        self._run_btn.grid(row=0, column=4, sticky="ew", padx=6)
-        self._stop_btn = ttk.Button(
-            profile_btn_frame,
-            text="■  Stop",
-            style="Secondary.TButton",
-            command=self._cmd_stop_chain,
-        )
-        self._stop_btn.grid(row=0, column=5, sticky="ew", padx=(6, 0))
-
-    def _build_sidebar(self, parent: ttk.Frame) -> None:
-        sidebar = ttk.Frame(parent, style="App.TFrame")
-        sidebar.grid(row=1, column=1, sticky="nsew")
-        sidebar.columnconfigure(0, weight=1)
-
-        profile_card = ttk.Frame(sidebar, style="Card.TFrame", padding=(18, 18, 18, 18))
-        profile_card.grid(row=0, column=0, sticky="ew")
-        ttk.Label(profile_card, text="Selected Profile", style="SectionTitle.TLabel").pack(anchor="w")
-        self._selected_profile_name = tk.Label(
-            profile_card,
-            text="No profile selected",
-            bg=COLORS["surface"],
-            fg=COLORS["text"],
-            font=(HEADING_FONT, 16),
-            anchor="w",
-            justify="left",
-        )
-        self._selected_profile_name.pack(fill="x", pady=(8, 2))
-        self._selected_profile_meta = tk.Label(
-            profile_card,
-            text="Choose a profile to inspect its hotkey and action chain.",
-            bg=COLORS["surface"],
-            fg=COLORS["muted"],
-            font=("Segoe UI", 10),
-            anchor="w",
-            justify="left",
-            wraplength=280,
-        )
-        self._selected_profile_meta.pack(fill="x")
-        self._selected_profile_steps = tk.Label(
-            profile_card,
-            text="No steps to preview yet.",
-            bg=COLORS["surface"],
-            fg=COLORS["text"],
-            font=("Consolas", 9),
-            anchor="w",
-            justify="left",
-            wraplength=280,
-            padx=10,
-            pady=10,
-        )
-        self._selected_profile_steps.pack(fill="x", pady=(12, 0))
-
-        import_card = ttk.Frame(sidebar, style="Card.TFrame", padding=(18, 18, 18, 18))
-        import_card.grid(row=1, column=0, sticky="ew", pady=(14, 0))
-        ttk.Label(import_card, text="Data", style="SectionTitle.TLabel").pack(anchor="w")
-        ttk.Label(
-            import_card,
-            text="Import existing profile packs or export your selected automation setup.",
-            style="Muted.TLabel",
-            wraplength=280,
-            justify="left",
-        ).pack(anchor="w", pady=(4, 14))
-
-        self._import_btn = ttk.Button(
-            import_card, text="↓  Import", style="Secondary.TButton", command=self._cmd_import
-        )
-        self._import_btn.pack(fill="x")
-        self._export_btn = ttk.Button(
-            import_card, text="↑  Export", style="Primary.TButton", command=self._cmd_export
-        )
-        self._export_btn.pack(fill="x", pady=(10, 0))
-
-        hotkey_card = ttk.Frame(sidebar, style="Card.TFrame", padding=(18, 18, 18, 18))
-        hotkey_card.grid(row=2, column=0, sticky="ew", pady=(14, 0))
-        ttk.Label(hotkey_card, text="Hotkeys", style="SectionTitle.TLabel").pack(anchor="w")
-        hotkey_text = (
-            "Run Active Profile: Ctrl+Alt+R\n"
-            "Stop Chain: Ctrl+Alt+X\n"
-            "Exit: Ctrl+Alt+Esc"
-        )
-        ttk.Label(
-            hotkey_card,
-            text=hotkey_text,
-            style="Muted.TLabel",
-            justify="left",
-        ).pack(anchor="w", pady=(8, 0))
-        ttk.Label(
-            hotkey_card,
-            text="Manual cursor controls still exist in the background, but the UI now stays focused on profiles.",
-            style="Muted.TLabel",
-            wraplength=280,
-            justify="left",
-        ).pack(anchor="w", pady=(10, 0))
-
-        self._error_frame = tk.Frame(
-            sidebar,
-            bg=COLORS["error_bg"],
-            highlightbackground=COLORS["error_border"],
-            highlightthickness=1,
-        )
-        self._error_label = tk.Label(
-            self._error_frame,
-            text="",
-            bg=COLORS["error_bg"],
-            fg=COLORS["error_text"],
-            anchor="w",
-            justify="left",
-            wraplength=280,
-            padx=12,
-            pady=12,
-        )
-        self._error_label.pack(fill="x")
-
-        footer = ttk.Frame(sidebar, style="Card.TFrame", padding=(18, 18, 18, 18))
-        footer.grid(row=4, column=0, sticky="ew", pady=(14, 0))
-        ttk.Label(footer, text="Window Behavior", style="SectionTitle.TLabel").pack(anchor="w")
-        self._footer_label = ttk.Label(
-            footer,
-            text=(
-                "Close hides the window to the tray when available. Use the tray icon or "
-                "taskbar icon to bring the UI back instantly."
-            ),
-            style="Muted.TLabel",
-            wraplength=280,
-            justify="left",
-        )
-        self._footer_label.pack(anchor="w", pady=(4, 0))
+        Routes through the :class:`ShutdownCoordinator` if available so we
+        don't depend on legacy globals; falls back to ``root.destroy`` only
+        as a last-resort safety net.
+        """
+        if self._shutdown is not None:
+            self._shutdown.trigger()
+        else:
+            try:
+                self._root.destroy()
+            except Exception:
+                pass
 
     def _open_update_url(self, _event=None) -> None:
         _, url = self._state.get_update_available()
@@ -428,59 +206,39 @@ class MainWindow:
             webbrowser.open(url)
 
     def _load_profiles(self) -> list:
-        if self._profile_store is None:
+        if self._profile_manager is None:
             return []
-        return self._profile_store.load()
+        return self._profile_manager.list()
 
     def _selected_profile(self):
         profile_id = self._state.get_active_profile_id()
-        if profile_id is None or self._profile_store is None:
+        if profile_id is None or self._profile_manager is None:
             return None
-        return self._profile_store.get_by_id(profile_id)
+        return self._profile_manager.get(profile_id)
 
     def _refresh_profile_list(self) -> None:
-        for item in self._profile_tree.get_children():
-            self._profile_tree.delete(item)
         profiles = self._load_profiles()
         active_id = self._state.get_active_profile_id()
-
-        for profile in profiles:
-            hotkey_str = profile.hotkey or "\u2014"
-            self._profile_tree.insert(
-                "", "end",
-                iid=profile.id,
-                values=(profile.name, hotkey_str, str(len(profile.steps))),
-            )
-
-        if active_id and self._profile_tree.exists(active_id):
-            self._profile_tree.selection_set(active_id)
-            self._profile_tree.see(active_id)
-
-        self._profile_count_label.config(text=f"{len(profiles)}/{MAX_PROFILES} profiles")
-        self._update_profile_details()
-        self._add_btn.config(state="disabled" if len(profiles) >= MAX_PROFILES else "normal")
+        self._profiles_panel.refresh(profiles, active_id)
+        self._hero.update_profile_count(len(profiles))
+        self._sidebar.update_selected_profile(self._selected_profile(), len(profiles))
         self._update_action_buttons()
 
     def _update_action_buttons(self) -> None:
         has_selection = self._selected_profile() is not None
         runner_busy = self._state.get_runner_busy()
-        self._edit_btn.config(state="normal" if has_selection and not runner_busy else "disabled")
-        self._duplicate_btn.config(state="normal" if has_selection and not runner_busy else "disabled")
-        self._delete_btn.config(state="normal" if has_selection and not runner_busy else "disabled")
-        self._run_btn.config(state="normal" if has_selection and not runner_busy else "disabled")
-        self._stop_btn.config(state="normal" if runner_busy else "disabled")
+        self._profiles_panel.update_buttons(has_selection, runner_busy)
 
-    def _on_profile_select(self, event) -> None:
-        selection = self._profile_tree.selection()
-        if not selection:
-            return
-        # selection[0] is the iid, which equals profile.id
-        self._state.set_active_profile_id(selection[0])
-        self._update_profile_details()
+    def _on_profile_select(self, profile_id: str) -> None:
+        self._state.set_active_profile_id(profile_id)
+        self._sidebar.update_selected_profile(
+            self._selected_profile(), len(self._load_profiles())
+        )
         self._update_action_buttons()
 
+    # --- commands ----------------------------------------------------------
     def _cmd_add(self) -> None:
-        if self._profile_store is None:
+        if self._profile_manager is None:
             return
         from swiftmacro.ui.step_builder import StepBuilderDialog
 
@@ -488,15 +246,13 @@ class MainWindow:
         self._root.wait_window(dialog.top)
         if dialog.result is None:
             return
-        self._profile_store.add_profile(dialog.result)
+        self._profile_manager.add(dialog.result)
         self._state.set_active_profile_id(dialog.result.id)
-        if self._hotkey_mgr is not None:
-            self._hotkey_mgr.refresh_profile_hotkeys(self._profile_store.load())
         self._refresh_profile_list()
         self._state.set_status_message(f"Profile saved: {dialog.result.name}")
 
     def _cmd_edit(self) -> None:
-        if self._profile_store is None:
+        if self._profile_manager is None:
             return
         profile = self._selected_profile()
         if profile is None:
@@ -508,43 +264,38 @@ class MainWindow:
         self._root.wait_window(dialog.top)
         if dialog.result is None:
             return
-        self._profile_store.update_profile(dialog.result)
-        if self._hotkey_mgr is not None:
-            self._hotkey_mgr.refresh_profile_hotkeys(self._profile_store.load())
+        self._profile_manager.update(dialog.result)
         self._refresh_profile_list()
         self._state.set_status_message(f"Profile updated: {dialog.result.name}")
 
     def _cmd_duplicate(self) -> None:
-        if self._profile_store is None:
+        if self._profile_manager is None:
             return
         profile = self._selected_profile()
         if profile is None:
             self._state.set_status_message("No profile selected")
             return
         if len(self._load_profiles()) >= MAX_PROFILES:
-            self._state.set_status_message(f"Cannot duplicate — max {MAX_PROFILES} profiles reached")
+            self._state.set_status_message(
+                f"Cannot duplicate — max {MAX_PROFILES} profiles reached"
+            )
             return
-        duplicate = self._profile_store.duplicate_profile(profile.id)
+        duplicate = self._profile_manager.duplicate(profile.id)
         self._state.set_active_profile_id(duplicate.id)
-        if self._hotkey_mgr is not None:
-            self._hotkey_mgr.refresh_profile_hotkeys(self._profile_store.load())
         self._refresh_profile_list()
         self._state.set_status_message(f"Profile duplicated: {duplicate.name}")
 
     def _cmd_delete(self) -> None:
-        if self._profile_store is None:
+        if self._profile_manager is None:
             return
         profile = self._selected_profile()
         if profile is None:
             self._state.set_status_message("No profile selected")
             return
-        confirmed = messagebox.askyesno("Delete Profile", f"Delete profile '{profile.name}'?")
-        if not confirmed:
+        if not messagebox.askyesno("Delete Profile", f"Delete profile '{profile.name}'?"):
             return
-        self._profile_store.delete_profile(profile.id)
+        self._profile_manager.delete(profile.id)
         self._state.set_active_profile_id(None)
-        if self._hotkey_mgr is not None:
-            self._hotkey_mgr.refresh_profile_hotkeys(self._profile_store.load())
         self._refresh_profile_list()
         self._state.set_status_message(f"Profile deleted: {profile.name}")
 
@@ -562,7 +313,7 @@ class MainWindow:
             self._action_runner.stop()
 
     def _cmd_import(self) -> None:
-        if self._profile_store is None:
+        if self._profile_manager is None:
             return
         path = filedialog.askopenfilename(
             title="Import Profiles",
@@ -571,15 +322,13 @@ class MainWindow:
         if not path:
             return
         try:
-            result = self._profile_store.import_profiles(path)
+            result = self._profile_manager.import_file(path)
         except ValueError as exc:
             messagebox.showwarning("Import Failed", str(exc))
             return
 
         if result.imported_ids:
             self._state.set_active_profile_id(result.imported_ids[-1])
-        if self._hotkey_mgr is not None:
-            self._hotkey_mgr.refresh_profile_hotkeys(self._profile_store.load())
         self._refresh_profile_list()
 
         parts = [f"Imported {len(result.imported_ids)} profile(s)"]
@@ -590,7 +339,7 @@ class MainWindow:
         self._state.set_status_message(", ".join(parts))
 
     def _cmd_export(self) -> None:
-        if self._profile_store is None:
+        if self._profile_manager is None:
             return
         profile = self._selected_profile()
         default_name = f"{profile.name}.json" if profile is not None else "profiles.json"
@@ -603,72 +352,22 @@ class MainWindow:
         if not path:
             return
 
-        exported = self._profile_store.export_profiles(
+        exported = self._profile_manager.export_file(
             path,
             [profile.id] if profile is not None else None,
         )
-        scope = "profile(s)" if profile is None else "profile"
-        self._state.set_status_message(f"Exported {exported} {scope}")
+        if profile is not None:
+            self._state.set_status_message(f"Exported '{profile.name}' (1 profile)")
+        else:
+            noun = "profile" if exported == 1 else "profiles"
+            self._state.set_status_message(f"Exported {exported} {noun}")
 
-    def _update_profile_details(self) -> None:
-        profile = self._selected_profile()
-        if profile is None:
-            profiles = self._load_profiles()
-            if profiles:
-                self._selected_profile_name.config(text="No profile selected", fg=COLORS["text"])
-                self._selected_profile_meta.config(
-                    text="Pick a profile from the list to see its hotkey, step count and preview."
-                )
-            else:
-                self._selected_profile_name.config(text="No profiles yet", fg=COLORS["muted"])
-                self._selected_profile_meta.config(
-                    text="Create your first profile to build a reusable click or keypress flow."
-                )
-            self._selected_profile_steps.config(text="No step preview available.")
-            return
-
-        hotkey = profile.hotkey or "Manual run only"
-        self._selected_profile_name.config(text=profile.name, fg=COLORS["text"])
-        self._selected_profile_meta.config(
-            text=f"Hotkey: {hotkey}\nSteps: {len(profile.steps)}",
-        )
-        preview_lines = []
-        for index, step in enumerate(profile.steps[:5], start=1):
-            preview_lines.append(f"{index}. {self._format_profile_step(step)}")
-        if len(profile.steps) > 5:
-            preview_lines.append(f"... +{len(profile.steps) - 5} more step(s)")
-        self._selected_profile_steps.config(text="\n".join(preview_lines))
-
+    # --- backwards-compat shim ---------------------------------------------
     def _format_profile_step(self, step) -> str:
-        icon = STEP_ICONS.get(step.action, "·")
-        params = step.params
-        if step.action == "move":
-            return f"{icon}  Move to {params.get('x')}, {params.get('y')}"
-        if step.action == "click":
-            return f"{icon}  {params.get('button', 'left').title()} click at {params.get('x')}, {params.get('y')}"
-        if step.action == "repeat_click":
-            return (
-                f"{icon}  {params.get('button', 'left').title()} click "
-                f"×{params.get('count')} at {params.get('x')}, {params.get('y')}"
-            )
-        if step.action == "keypress":
-            return f"{icon}  Press '{params.get('key')}'"
-        if step.action == "wait":
-            return f"{icon}  Wait {params.get('ms')} ms"
-        if step.action == "lock":
-            duration = params.get("duration_ms", 0)
-            suffix = "forever" if duration == 0 else f"{duration} ms"
-            return f"{icon}  Lock at {params.get('x')}, {params.get('y')} for {suffix}"
-        if step.action == "scroll":
-            return f"{icon}  Scroll {params.get('direction')} ×{params.get('amount')} at {params.get('x')}, {params.get('y')}"
-        if step.action == "hold_key":
-            duration = params.get("duration_ms", 0)
-            suffix = "until stopped" if duration == 0 else f"{duration} ms"
-            return f"{icon}  Hold '{params.get('key')}' {suffix}"
-        if step.action == "random_delay":
-            return f"{icon}  Random delay {params.get('min_ms')}–{params.get('max_ms')} ms"
-        return f"{icon}  {step.action}"
+        """Legacy hook — kept so older tests/callers don't break."""
+        return step.format_label()
 
+    # --- poll loop ---------------------------------------------------------
     def _poll(self) -> None:
         if self._state.stop_event.is_set():
             return
@@ -677,70 +376,26 @@ class MainWindow:
         chain_active, chain_pos = self._state.get_chain_lock()
         runner_busy = self._state.get_runner_busy()
 
-        self._pos_label.config(
-            text=profile.name if profile is not None else "No profile",
-            fg=COLORS["text"] if profile is not None else COLORS["muted"],
-        )
-
-        if runner_busy:
-            lock_text = "Running"
-            lock_color = COLORS["success"]
-        elif chain_active and chain_pos is not None:
-            lock_text = f"Lock at {chain_pos[0]}, {chain_pos[1]}"
-            lock_color = COLORS["warning"]
-        else:
-            lock_text = "Idle"
-            lock_color = COLORS["muted"]
-        self._lock_label.config(text=lock_text, fg=lock_color)
-
-        status_message = self._state.get_status_message().strip()
-        self._status_label.config(
-            text=status_message or "Ready. Create, select or run a profile."
-        )
-
-        errors = self._state.get_hotkey_errors()
-        if errors:
-            self._error_label.config(text="\n".join(errors))
-            self._error_frame.grid(row=3, column=0, sticky="ew", pady=(14, 0))
-        else:
-            self._error_frame.grid_forget()
-
-        self._runner_chip.config(
-            text="Running Chain" if runner_busy else "Idle",
-            bg=COLORS["chip_running_bg"] if runner_busy else COLORS["chip_idle_bg"],
-            fg=COLORS["success"] if runner_busy else COLORS["chip_idle_fg"],
-        )
+        # Hero
+        self._hero.update_focus(profile)
+        self._hero.update_execution(runner_busy, chain_active, chain_pos)
+        self._hero.update_runner_chip(runner_busy)
         available, _ = self._state.get_update_available()
-        if available:
-            self._update_chip.pack(side="left", padx=(10, 0))
-        else:
-            self._update_chip.pack_forget()
-        self._footer_label.config(
-            text=(
-                "Close hides the window to the tray when available. Use the tray icon or "
-                "taskbar icon to bring the UI back instantly."
-                if self._tray_available
-                else "Tray is unavailable right now. Closing the window will exit the application."
-            )
+        self._hero.update_update_chip(available)
+
+        # Profiles panel
+        self._profiles_panel.update_status_message(
+            self._state.get_status_message().strip()
         )
-        self._update_profile_details()
-        self._update_action_buttons()
-
         current, total = self._state.get_chain_progress()
-        if self._state.get_runner_busy() and total > 0:
-            pct = int(current / total * 100)
-            self._progress_bar.config(value=pct)
-            self._progress_bar.grid(row=2, column=0, sticky="ew")
-        else:
-            self._progress_bar.grid_remove()
-
-        # Using _load_profiles() rather than _profile_store.load() directly — safer: handles profile_store=None
+        self._profiles_panel.update_progress(current, total, runner_busy)
         profiles = self._load_profiles()
-        if profiles:
-            self._empty_state_frame.grid_remove()
-            self._list_shell.grid()
-        else:
-            self._list_shell.grid_remove()
-            self._empty_state_frame.grid(row=3, column=0, sticky="nsew")
+        self._profiles_panel.toggle_empty_state(bool(profiles))
 
+        # Sidebar
+        self._sidebar.update_errors(self._state.get_hotkey_errors())
+        self._sidebar.update_footer()
+        self._sidebar.update_selected_profile(profile, len(profiles))
+
+        self._update_action_buttons()
         self._root.after(UI_POLL_MS, self._poll)

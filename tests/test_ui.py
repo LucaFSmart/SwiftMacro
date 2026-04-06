@@ -87,7 +87,7 @@ def test_main_window_profile_details_show_selected_profile(tk_root):
     assert ui._selected_profile_name.cget("text") == "Farm"
     assert "Hotkey: ctrl+alt+1" in ui._selected_profile_meta.cget("text")
     assert "Move to 10, 20" in ui._selected_profile_steps.cget("text")
-    assert ui._tray_chip.cget("text") == "Tray Ready"
+    assert ui._tray_chip.cget("text") == "TRAY READY"
 
     for child in tk_root.winfo_children():
         child.destroy()
@@ -188,8 +188,8 @@ def test_make_chip_returns_label(tk_root):
     from swiftmacro.ui.theme import COLORS, make_chip
     chip = make_chip(tk_root, "Test", COLORS["chip_idle_bg"], COLORS["chip_idle_fg"])
     assert chip.cget("text") == "Test"
-    assert chip.cget("padx") == 12
-    assert chip.cget("pady") == 5
+    assert chip.cget("padx") == 14
+    assert chip.cget("pady") == 6
     assert chip.cget("bg") == COLORS["chip_idle_bg"]
     assert chip.cget("fg") == COLORS["chip_idle_fg"]
     chip.destroy()

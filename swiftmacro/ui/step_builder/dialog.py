@@ -1,113 +1,42 @@
-"""Profile editor for building action chains."""
+"""Modal profile editor — orchestrates the steps list and step editor panel."""
 from __future__ import annotations
 
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from swiftmacro.constants import MAX_STEPS, STEP_ICONS, SYSTEM_HOTKEYS
+from swiftmacro.constants import (
+    MAX_STEPS,
+    STEP_BUILDER_MIN_SIZE,
+    STEP_BUILDER_SIZE,
+    SYSTEM_HOTKEYS,
+)
 from swiftmacro.cursor import get_cursor_pos
 from swiftmacro.models import ActionStep, Profile, VALID_ACTIONS
+from swiftmacro.ui.step_builder.forms import (
+    _ACTION_HINTS,
+    _COMBO_VALUES,
+    _INT_PARAMS,
+    _NEEDS_POSITION,
+    _PARAM_FIELDS,
+    COMMON_KEYS,
+)
 from swiftmacro.ui.theme import COLORS, MONO_FONT, configure_theme, style_listbox
-
-_PARAM_FIELDS: dict[str, list[tuple[str, ...]]] = {
-    "move": [("x", "X", "0"), ("y", "Y", "0")],
-    "click": [("button", "Button", "left", "combo"), ("x", "X", "0"), ("y", "Y", "0")],
-    "repeat_click": [
-        ("button", "Button", "left", "combo"),
-        ("x", "X", "0"),
-        ("y", "Y", "0"),
-        ("count", "Count", "5"),
-        ("interval_ms", "Interval (ms)", "100"),
-    ],
-    "keypress": [("key", "Key", "enter", "key_combo")],
-    "wait": [("ms", "Duration (ms)", "100")],
-    "lock": [
-        ("x", "X", "0"),
-        ("y", "Y", "0"),
-        ("duration_ms", "Duration (ms, 0 = forever)", "0"),
-    ],
-    "scroll": [
-        ("x", "X", "0"),
-        ("y", "Y", "0"),
-        ("direction", "Direction", "down", "combo"),
-        ("amount", "Amount (notches)", "3"),
-    ],
-    "hold_key": [
-        ("key", "Key", "w", "key_combo"),
-        ("duration_ms", "Duration (ms, 0 = until stopped)", "500"),
-    ],
-    "random_delay": [
-        ("min_ms", "Min delay (ms)", "50"),
-        ("max_ms", "Max delay (ms)", "200"),
-    ],
-}
-
-_NEEDS_POSITION = {"move", "click", "repeat_click", "lock", "scroll"}
-_INT_PARAMS = {"x", "y", "count", "interval_ms", "ms", "duration_ms", "amount", "min_ms", "max_ms"}
-
-_COMBO_VALUES: dict[str, list[str]] = {
-    "button":    ["left", "right", "middle"],
-    "direction": ["up", "down", "left", "right"],
-}
-
-COMMON_KEYS: list[str] = [
-    "enter", "space", "tab", "backspace", "delete", "escape",
-    "shift", "ctrl", "alt", "win",
-    "up", "down", "left", "right",
-    "home", "end", "page up", "page down",
-    "f1", "f2", "f3", "f4", "f5", "f6",
-    "f7", "f8", "f9", "f10", "f11", "f12",
-    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
-    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
-    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-]
-
-_ACTION_HINTS = {
-    "move": "Move the cursor to an exact screen coordinate without clicking.",
-    "click": "Trigger a single mouse click at a fixed position.",
-    "repeat_click": "Spam the same mouse click multiple times with a configurable delay.",
-    "keypress": "Send one keyboard key or named key like enter, tab or space.",
-    "wait": "Pause the chain for a short or long delay in milliseconds.",
-    "lock": "Temporarily or permanently keep the cursor pinned to one coordinate.",
-    "scroll": "Scroll the mouse wheel at a position. Direction: up, down, left, right.",
-    "hold_key": "Hold a key down for a duration in milliseconds. 0 = hold until chain stops.",
-    "random_delay": "Pause for a random duration between min and max milliseconds — adds human-like timing.",
-}
-
-
-def format_step_label(step: ActionStep) -> str:
-    """One-line human-readable description of a step, with type icon prefix."""
-    icon = STEP_ICONS.get(step.action, "·")
-    params = step.params
-    if step.action == "move":
-        return f"{icon}  move → ({params.get('x', '?')}, {params.get('y', '?')})"
-    if step.action == "click":
-        return f"{icon}  click {params.get('button', '?')} → ({params.get('x', '?')}, {params.get('y', '?')})"
-    if step.action == "repeat_click":
-        return (
-            f"{icon}  repeat {params.get('button', '?')} ×{params.get('count', '?')} "
-            f"→ ({params.get('x', '?')}, {params.get('y', '?')})"
-        )
-    if step.action == "keypress":
-        return f"{icon}  keypress '{params.get('key', '?')}'"
-    if step.action == "wait":
-        return f"{icon}  wait {params.get('ms', '?')} ms"
-    if step.action == "lock":
-        duration = params.get("duration_ms", 0)
-        duration_label = "forever" if duration == 0 else f"{duration} ms"
-        return f"{icon}  lock ({params.get('x', '?')}, {params.get('y', '?')}) {duration_label}"
-    if step.action == "scroll":
-        return f"{icon}  scroll {params.get('direction', '?')} ×{params.get('amount', '?')} @ ({params.get('x', '?')}, {params.get('y', '?')})"
-    if step.action == "hold_key":
-        duration = params.get("duration_ms", 0)
-        duration_label = "until stopped" if duration == 0 else f"{duration} ms"
-        return f"{icon}  hold '{params.get('key', '?')}' {duration_label}"
-    if step.action == "random_delay":
-        return f"{icon}  random delay {params.get('min_ms', '?')}–{params.get('max_ms', '?')} ms"
-    return f"{icon}  {step.action}"
 
 
 class StepBuilderDialog:
+    """Toplevel window for adding or editing a single :class:`Profile`.
+
+    The dialog is split internally into three areas:
+
+    * a *details* card (name / hotkey / repeat),
+    * a *steps* card (ordered list + reordering buttons),
+    * a *step editor* card (action picker + dynamic parameter fields).
+
+    Attribute names are kept underscore-prefixed because the test suite
+    reaches into them by name (``_param_vars``, ``_steps``, ``_repeat_var``,
+    ``_pick_btn`` and friends).
+    """
+
     def __init__(self, parent: tk.Tk, profile_store, profile: Profile | None = None) -> None:
         self._profile_store = profile_store
         self._editing = profile
@@ -117,33 +46,20 @@ class StepBuilderDialog:
 
         self.top = tk.Toplevel(parent)
         self.top.title("Edit Profile" if profile else "New Profile")
-        self.top.geometry("900x760")
-        self.top.minsize(860, 720)
+        self.top.geometry(f"{STEP_BUILDER_SIZE[0]}x{STEP_BUILDER_SIZE[1]}")
+        self.top.minsize(*STEP_BUILDER_MIN_SIZE)
         self.top.resizable(True, True)
         self.top.transient(parent)
         self.top.grab_set()
         self.top.configure(bg=COLORS["bg"])
         configure_theme(self.top)
 
-        shell = ttk.Frame(self.top, style="App.TFrame", padding=(26, 22, 26, 22))
+        shell = ttk.Frame(self.top, style="App.TFrame", padding=(28, 24, 28, 24))
         shell.pack(fill="both", expand=True)
         shell.columnconfigure(0, weight=1)
         shell.rowconfigure(1, weight=1)
 
-        hero = ttk.Frame(shell, style="App.TFrame")
-        hero.grid(row=0, column=0, sticky="ew")
-        ttk.Label(
-            hero,
-            text="Profile Builder",
-            style="HeroTitle.TLabel",
-        ).pack(anchor="w")
-        ttk.Label(
-            hero,
-            text="Define a reusable action chain with optional hotkey bindings and ordered steps.",
-            style="HeroBody.TLabel",
-            wraplength=640,
-            justify="left",
-        ).pack(anchor="w", pady=(6, 16))
+        self._build_hero(shell)
 
         content = ttk.Frame(shell, style="App.TFrame")
         content.grid(row=1, column=0, sticky="nsew")
@@ -151,7 +67,28 @@ class StepBuilderDialog:
         content.columnconfigure(1, weight=4)
         content.rowconfigure(1, weight=1)
 
-        details = ttk.Frame(content, style="Card.TFrame", padding=(18, 18, 18, 18))
+        self._build_details_card(content, profile)
+        self._build_steps_panel(content)
+        self._build_editor_panel(content)
+        self._build_bottom_bar(shell)
+
+        self._refresh_steps_list()
+
+    # --- build helpers -----------------------------------------------------
+    def _build_hero(self, shell: ttk.Frame) -> None:
+        hero = ttk.Frame(shell, style="App.TFrame")
+        hero.grid(row=0, column=0, sticky="ew")
+        ttk.Label(hero, text="Profile Builder", style="HeroTitle.TLabel").pack(anchor="w")
+        ttk.Label(
+            hero,
+            text="Define a reusable action chain with optional hotkey bindings and ordered steps.",
+            style="HeroBody.TLabel",
+            wraplength=640,
+            justify="left",
+        ).pack(anchor="w", pady=(6, 18))
+
+    def _build_details_card(self, content: ttk.Frame, profile: Profile | None) -> None:
+        details = ttk.Frame(content, style="Card.TFrame", padding=(20, 18, 20, 20))
         details.grid(row=0, column=0, columnspan=2, sticky="ew")
         details.columnconfigure(0, weight=1)
         details.columnconfigure(1, weight=1)
@@ -164,6 +101,9 @@ class StepBuilderDialog:
             text="Hotkey (optional, example: ctrl+alt+1)",
             style="SectionTitle.TLabel",
         ).grid(row=0, column=1, sticky="w", padx=(12, 0))
+        ttk.Label(details, text="Repeat (0 = loop forever)", style="SectionTitle.TLabel").grid(
+            row=0, column=2, sticky="w", padx=(12, 0)
+        )
 
         self._name_var = tk.StringVar(value=profile.name if profile else "")
         ttk.Entry(details, textvariable=self._name_var).grid(
@@ -176,17 +116,15 @@ class StepBuilderDialog:
             row=1, column=1, sticky="ew", padx=(12, 0), pady=(8, 0)
         )
 
-        ttk.Label(details, text="Repeat (0 = loop forever)", style="SectionTitle.TLabel").grid(
-            row=0, column=2, sticky="w", padx=(12, 0)
-        )
         initial_repeat = str(profile.repeat) if profile else "1"
         self._repeat_var = tk.StringVar(value=initial_repeat)
         ttk.Entry(details, textvariable=self._repeat_var, width=8).grid(
             row=1, column=2, sticky="w", padx=(12, 0), pady=(8, 0)
         )
 
-        steps_panel = ttk.Frame(content, style="Card.TFrame", padding=(18, 18, 18, 18))
-        steps_panel.grid(row=1, column=0, sticky="nsew", padx=(0, 12), pady=(14, 0))
+    def _build_steps_panel(self, content: ttk.Frame) -> None:
+        steps_panel = ttk.Frame(content, style="Card.TFrame", padding=(20, 18, 20, 20))
+        steps_panel.grid(row=1, column=0, sticky="nsew", padx=(0, 14), pady=(14, 0))
         steps_panel.columnconfigure(0, weight=1)
         steps_panel.rowconfigure(1, weight=1)
 
@@ -196,8 +134,11 @@ class StepBuilderDialog:
         ttk.Label(steps_header, text="Chain Steps", style="SectionTitle.TLabel").grid(
             row=0, column=0, sticky="w"
         )
-        self._step_count_label = ttk.Label(steps_header, text=f"0/{MAX_STEPS} steps", style="Badge.TLabel")
+        self._step_count_label = ttk.Label(
+            steps_header, text=f"0/{MAX_STEPS} steps", style="Badge.TLabel"
+        )
         self._step_count_label.grid(row=0, column=1, sticky="e")
+
         list_shell = tk.Frame(
             steps_panel,
             bg=COLORS["entry_bg"],
@@ -211,7 +152,7 @@ class StepBuilderDialog:
         self._steps_listbox = tk.Listbox(
             list_shell,
             height=12,
-            font=(MONO_FONT, 9),
+            font=(MONO_FONT, 10),
             exportselection=False,
         )
         style_listbox(self._steps_listbox)
@@ -229,20 +170,21 @@ class StepBuilderDialog:
         step_btn_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
         for column in range(4):
             step_btn_frame.columnconfigure(column, weight=1)
-        ttk.Button(step_btn_frame, text="↑  Up", style="Secondary.TButton", command=self._move_up).grid(
-            row=0, column=0, sticky="ew", padx=(0, 6)
-        )
         ttk.Button(
-            step_btn_frame, text="↓  Down", style="Secondary.TButton", command=self._move_down
+            step_btn_frame, text="↑  Up", style="Secondary.TButton", command=self._move_up,
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        ttk.Button(
+            step_btn_frame, text="↓  Down", style="Secondary.TButton", command=self._move_down,
         ).grid(row=0, column=1, sticky="ew", padx=6)
         ttk.Button(
-            step_btn_frame, text="✕  Remove", style="Danger.TButton", command=self._remove_step
+            step_btn_frame, text="✕  Remove", style="Danger.TButton", command=self._remove_step,
         ).grid(row=0, column=2, sticky="ew", padx=6)
         ttk.Button(
-            step_btn_frame, text="Reset", style="Secondary.TButton", command=self._reset_step_form
+            step_btn_frame, text="Reset", style="Secondary.TButton", command=self._reset_step_form,
         ).grid(row=0, column=3, sticky="ew", padx=(6, 0))
 
-        editor_panel = ttk.Frame(content, style="Card.TFrame", padding=(18, 18, 18, 18))
+    def _build_editor_panel(self, content: ttk.Frame) -> None:
+        editor_panel = ttk.Frame(content, style="Card.TFrame", padding=(20, 18, 20, 20))
         editor_panel.grid(row=1, column=1, sticky="nsew", pady=(14, 0))
         editor_panel.columnconfigure(0, weight=1)
 
@@ -313,19 +255,19 @@ class StepBuilderDialog:
         )
         self._editing_state_label.pack(fill="x", pady=(10, 0))
 
+    def _build_bottom_bar(self, shell: ttk.Frame) -> None:
         bottom_frame = ttk.Frame(shell, style="App.TFrame")
-        bottom_frame.grid(row=2, column=0, sticky="ew", pady=(18, 0))
+        bottom_frame.grid(row=2, column=0, sticky="ew", pady=(20, 0))
         bottom_frame.columnconfigure(0, weight=1)
         bottom_frame.columnconfigure(1, weight=1)
-        ttk.Button(bottom_frame, text="Cancel", style="Secondary.TButton", command=self.top.destroy).grid(
-            row=0, column=0, sticky="ew", padx=(0, 8)
-        )
-        ttk.Button(bottom_frame, text="✓  Save", style="Primary.TButton", command=self._save).grid(
-            row=0, column=1, sticky="ew", padx=(8, 0)
-        )
+        ttk.Button(
+            bottom_frame, text="Cancel", style="Secondary.TButton", command=self.top.destroy,
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        ttk.Button(
+            bottom_frame, text="✓  Save", style="Primary.TButton", command=self._save,
+        ).grid(row=0, column=1, sticky="ew", padx=(8, 0))
 
-        self._refresh_steps_list()
-
+    # --- editor helpers ----------------------------------------------------
     def _build_param_fields(self, action: str) -> None:
         for child in self._param_frame.winfo_children():
             child.destroy()
@@ -379,7 +321,9 @@ class StepBuilderDialog:
         for name, value in step.params.items():
             if name in self._param_vars:
                 self._param_vars[name].set(str(value))
-        self._action_hint_label.config(text=_ACTION_HINTS.get(step.action, "Configure this step."))
+        self._action_hint_label.config(
+            text=_ACTION_HINTS.get(step.action, "Configure this step.")
+        )
 
     def _reset_step_form(self) -> None:
         self._editing_step_index = None
@@ -393,12 +337,12 @@ class StepBuilderDialog:
     def _refresh_steps_list(self) -> None:
         self._steps_listbox.delete(0, tk.END)
         for index, step in enumerate(self._steps, start=1):
-            self._steps_listbox.insert(tk.END, f"{index}. {format_step_label(step)}")
+            self._steps_listbox.insert(tk.END, f"{index}. {step.format_label()}")
         can_add_new = len(self._steps) < MAX_STEPS or self._editing_step_index is not None
         self._add_step_btn.config(state="normal" if can_add_new else "disabled")
         self._step_count_label.config(text=f"{len(self._steps)}/{MAX_STEPS} steps")
 
-    def _on_step_select(self, event) -> None:
+    def _on_step_select(self, _event) -> None:
         selection = self._steps_listbox.curselection()
         if not selection:
             return
@@ -492,21 +436,8 @@ class StepBuilderDialog:
             return
 
         hotkey = self._hotkey_var.get().strip() or None
-        if hotkey:
-            hotkey_lower = hotkey.lower()
-            if hotkey_lower in SYSTEM_HOTKEYS:
-                messagebox.showwarning("Conflict", f"{hotkey} conflicts with a system hotkey")
-                return
-            if self._profile_store is not None:
-                for profile in self._profile_store.load():
-                    if self._editing is not None and profile.id == self._editing.id:
-                        continue
-                    if profile.hotkey and profile.hotkey.lower() == hotkey_lower:
-                        messagebox.showwarning(
-                            "Conflict",
-                            f"{hotkey} is already used by profile '{profile.name}'",
-                        )
-                        return
+        if hotkey and not self._validate_hotkey(hotkey):
+            return
 
         repeat_raw = self._repeat_var.get().strip()
         try:
@@ -517,17 +448,8 @@ class StepBuilderDialog:
             messagebox.showwarning("Invalid", "Repeat must be a whole number \u2265 0")
             return
 
-        for index, step in enumerate(self._steps):
-            if (
-                step.action == "lock"
-                and step.params.get("duration_ms", 0) == 0
-                and index < len(self._steps) - 1
-            ):
-                messagebox.showinfo(
-                    "Note",
-                    f"Step {index + 1} is a permanent lock. Later steps will never run.",
-                )
-                break
+        if not self._warn_if_blocking_lock_not_last():
+            return  # user opted to keep editing
 
         if self._editing is not None:
             self._editing.name = name
@@ -541,3 +463,39 @@ class StepBuilderDialog:
             self.result = p
 
         self.top.destroy()
+
+    def _validate_hotkey(self, hotkey: str) -> bool:
+        hotkey_lower = hotkey.lower()
+        if hotkey_lower in SYSTEM_HOTKEYS:
+            messagebox.showwarning("Conflict", f"{hotkey} conflicts with a system hotkey")
+            return False
+        if self._profile_store is None:
+            return True
+        for profile in self._profile_store.load():
+            if self._editing is not None and profile.id == self._editing.id:
+                continue
+            if profile.hotkey and profile.hotkey.lower() == hotkey_lower:
+                messagebox.showwarning(
+                    "Conflict",
+                    f"{hotkey} is already used by profile '{profile.name}'",
+                )
+                return False
+        return True
+
+    def _warn_if_blocking_lock_not_last(self) -> bool:
+        """Return True if the user accepted (or there is no problem)."""
+        for index, step in enumerate(self._steps):
+            if (
+                step.action == "lock"
+                and step.params.get("duration_ms", 0) == 0
+                and index < len(self._steps) - 1
+            ):
+                return messagebox.askyesno(
+                    "Permanent lock blocks later steps",
+                    (
+                        f"Step {index + 1} is a permanent lock (duration 0 ms). "
+                        f"All {len(self._steps) - index - 1} step(s) after it will "
+                        f"never run.\n\nSave anyway?"
+                    ),
+                )
+        return True
