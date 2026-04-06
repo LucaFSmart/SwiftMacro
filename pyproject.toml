@@ -1,6 +1,6 @@
 [project]
 name = "swiftmacro"
-version = "1.0.0"
+version = "1.1.1"
 description = "Windows desktop utility for reusable mouse and keyboard automation chains"
 license = "MIT"
 requires-python = ">=3.10"
