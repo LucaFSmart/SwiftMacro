@@ -36,11 +36,23 @@ $installerPath = Join-Path $repoRoot "dist\SwiftMacro-Setup.exe"
 if (-not (Test-Path $exePath))      { Write-Error "dist\SwiftMacro.exe missing. Run build_exe.ps1.";       exit 1 }
 if (-not (Test-Path $installerPath)) { Write-Error "dist\SwiftMacro-Setup.exe missing. Run build_installer.ps1."; exit 1 }
 
-# Determine previous tag or first commit SHA
-$prevTag = git describe --tags --abbrev=0 2>$null
-if ($LASTEXITCODE -ne 0 -or -not $prevTag) {
+# Determine previous tag or first commit SHA.
+# `git describe` errors (and PowerShell's Stop preference would abort the
+# script) when no reachable tag exists, so temporarily drop to Continue for
+# this probe and swallow both stderr and native errors.
+$prevTag = $null
+$savedPref = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+    $prevTag = git describe --tags --abbrev=0 2>$null
+} catch {
+    $prevTag = $null
+}
+$ErrorActionPreference = $savedPref
+$global:LASTEXITCODE = 0
+if (-not $prevTag) {
     $prevTag = git rev-list --max-parents=0 HEAD
-    Write-Host "No previous tag found, using first commit: $prevTag"
+    Write-Host "No reachable tag found, using first commit: $prevTag"
 }
 
 # Generate changelog from feat:/fix: commits
